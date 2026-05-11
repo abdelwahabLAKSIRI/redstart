@@ -71,7 +71,7 @@ def _():
     import numpy as np
     import numpy.linalg as la
 
-    return np, sci
+    return np, plt, sci
 
 
 @app.cell(hide_code=True)
@@ -360,7 +360,7 @@ def _(F, sci):
         # sol(t) -> state at time t
         return result.sol
 
-    return
+    return (redstart_solve,)
 
 
 @app.cell(hide_code=True)
@@ -377,6 +377,51 @@ def _(mo):
     return
 
 
+@app.cell
+def _(l, np, plt, redstart_solve):
+    def free_fall_example():
+        t_span = [0.0, 5.0]
+
+        # [x, vx, y, vy, theta, omega]
+        y0 = [0.0, 0.0, 10.0, 0.0, 0.0, 0.0]
+
+        # No thrust, no tilt
+        def f_phi(t, y):
+            return np.array([0.0, 0.0])
+
+        # Solve the dynamics
+        sol = redstart_solve(t_span, y0, f_phi)
+
+        # Time samples for plotting
+        t = np.linspace(t_span[0], t_span[1], 1000)
+
+        # y(t) is the 3rd state variable
+        y_t = sol(t)[2]
+
+        # Plot the trajectory
+        plt.plot(t, y_t, label=r"$y(t)$ (height in meters)")
+
+        # Reference line y = l
+        plt.plot(
+            t,
+            l * np.ones_like(t),
+            color="grey",
+            ls="--",
+            label=r"$y=\ell$",
+        )
+
+        plt.title("Free Fall")
+        plt.xlabel("time $t$")
+        plt.ylabel("height")
+        plt.grid(True)
+        plt.legend()
+
+        return plt.gcf()
+
+    free_fall_example()
+    return
+
+
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
@@ -388,6 +433,76 @@ def _(mo):
 
     Simulate the corresponding scenario, display graphically the results and check that your solution works as expected.
     """)
+    return
+
+
+@app.cell
+def _(M, g):
+    T = 5.0
+
+    # Desired landing trajectory
+    def y_landing(t):
+        return 10 - 2*t - (7/25)*t**2 + (8/125)*t**3
+
+    # Vertical velocity
+    def vy_landing(t):
+        return -2 - (14/25)*t + (24/125)*t**2
+
+    # Vertical acceleration
+    def ay_landing(t):
+        return -(14/25) + (48/125)*t
+
+    # Required thrust
+    def f_landing(t):
+        return M * (ay_landing(t) + g)
+
+    return T, f_landing
+
+
+@app.cell
+def _(T, f_landing, l, np, plt, redstart_solve):
+    def controlled_landing_example():
+        t_span = [0.0, T]
+
+        # [x, vx, y, vy, theta, omega]
+        y0 = [0.0, 0.0, 10.0, -2.0, 0.0, 0.0]
+
+        # Force along the booster axis: phi = 0
+        def f_phi(t, y):
+            return np.array([f_landing(t), 0.0])
+
+        sol = redstart_solve(t_span, y0, f_phi)
+
+        t = np.linspace(0.0, T, 1000)
+        states = sol(t)
+
+        y_t = states[2]
+        vy_t = states[3]
+
+        plt.plot(t, y_t, label=r"$y(t)$")
+        plt.plot(t, l/2 * np.ones_like(t), "--", label=r"$y=\ell/2$")
+        plt.title("Controlled Landing: Height")
+        plt.xlabel("time $t$")
+        plt.ylabel("height")
+        plt.grid(True)
+        plt.legend()
+        plt.show()
+
+        plt.plot(t, vy_t, label=r"$\dot y(t)$")
+        plt.plot(t, np.zeros_like(t), "--", label=r"$\dot y=0$")
+        plt.title("Controlled Landing: Vertical Velocity")
+        plt.xlabel("time $t$")
+        plt.ylabel("vertical velocity")
+        plt.grid(True)
+        plt.legend()
+        plt.show()
+
+        final_state = sol(T)
+        print("Final state:", final_state)
+
+        return final_state
+
+    controlled_landing_example()
     return
 
 
