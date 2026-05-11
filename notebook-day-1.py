@@ -148,10 +148,30 @@ def _(mo):
 
 @app.cell
 def _(np):
-    def force_components(f,theta,phi):
+    def force_components(f, theta, phi):
+        """
+        Compute the cartesian components of the reactor thrust force.
+
+        Parameters:
+            f     : thrust magnitude (>= 0)
+            theta : booster tilt angle (rad, CCW from vertical)
+            phi   : thrust deflection angle relative to booster axis (rad, CCW)
+
+        Returns:
+            fx, fy: force components in world coordinates
+
+        Physics:
+            The total thrust direction in world coordinates is (theta + phi).
+            We decompose this into x and y using trigonometry:
+              - x-component points left when sin is positive (hence the negative sign)
+              - y-component points upward when cos is positive
+        """
+        # Total angle of thrust vector measured from vertical (world y-axis)
+        # x-component: negative because theta>0 (left tilt) should push leftward
         fx= -f * np.sin(theta + phi)
+        # y-component: positive upward thrust
         fy= f * np.cos(theta + phi)
-        return fx,fy
+        return fx, fy
 
     return (force_components,)
 
@@ -168,12 +188,32 @@ def _(mo):
 
 @app.cell
 def _(M, force_components, g):
-    def center_of_mass_acceleration(f,theta,phi):
-        fx, fy= force_components(f,theta,phi)
+    def center_of_mass_acceleration(f, theta, phi):
+        """
+        Compute the linear acceleration of the booster's center of mass.
 
+        Parameters:
+            f     : thrust magnitude
+            theta : booster tilt angle (rad)
+            phi   : thrust deflection angle (rad)
+
+        Returns:
+            x_ddot, y_ddot: acceleration components (m/s^2)
+
+        Physics:
+            Newton's second law: F = M * a  =>  a = F / M
+            - Horizontal acceleration comes entirely from thrust
+            - Vertical acceleration = thrust/M - gravity (g acts downward)
+        """
+        # Get thrust components in world coordinates
+        fx, fy= force_components(f, theta, phi)
+
+        # Horizontal acceleration: a_x = F_x / M
         x_ddot=fx/M
+        # Vertical acceleration: a_y = F_y / M - g
+        # (gravity g pulls downward, reducing net upward acceleration)
         y_ddot= fy/M - g
-        return x_ddot,y_ddot
+        return x_ddot, y_ddot
 
     return (center_of_mass_acceleration,)
 
@@ -207,7 +247,27 @@ def _(mo):
 
 @app.cell
 def _(J, l, np):
-    def angular_acceleration(f,phi):
+    def angular_acceleration(f, phi):
+        """
+        Compute the angular acceleration (theta_ddot) of the booster.
+
+        Parameters:
+            f   : thrust magnitude
+            phi : thrust deflection angle relative to booster axis (rad)
+
+        Returns:
+            theta_ddot: angular acceleration (rad/s^2)
+
+        Physics:
+            Torque = force * lever_arm * sin(angle_between_them)
+            - The reactor is at the base, lever arm = l/2 from COM
+            - Only the perpendicular component of thrust creates torque
+            - Torque = -(l/2) * f * sin(phi)  [negative for CCW convention]
+            - theta_ddot = Torque / J  (moment of inertia)
+        """
+        # Torque about COM: lever arm (l/2) × perpendicular thrust component f*sin(phi)
+        # Negative sign enforces the correct CCW rotation convention
+        # Angular acceleration = Torque / Moment of Inertia
         theta_ddot = - ((l/2)*f/J)*np.sin(phi)
         return theta_ddot
 
@@ -244,47 +304,59 @@ def _(angular_acceleration, center_of_mass_acceleration, np):
     n = 6
 
     def F(s, f, phi):
+        """
+        Compute the time derivative of the state vector (the vector field).
 
-        # Unpack the state vector
+        Parameters:
+            s   : state vector [x, vx, y, vy, theta, omega]
+            f   : thrust magnitude (control input)
+            phi : thrust angle (control input)
+
+        Returns:
+            s_dot : time derivative ds/dt = [x_dot, vx_dot, y_dot, vy_dot,
+                                             theta_dot, omega_dot]
+
+        State space (n=6 dimensions):
+            x     : horizontal position of COM
+            vx    : horizontal velocity (x_dot)
+            y     : vertical position of COM
+            vy    : vertical velocity (y_dot)
+            theta : tilt angle (CCW from vertical)
+            omega : angular velocity (theta_dot)
+        """
+        # Unpack the state vector for readability
         x, vx, y, vy, theta, omega = s
 
-        # By definition:
-        # x_dot = vx
-        x_dot = vx
+        # --- Kinematic equations (by definition) ---
 
-        # Newton's second law for translation
-        # returns x_ddot and y_ddot
+        # Position derivatives equal velocities
+        x_dot = vx        # dx/dt = v_x
+
+        # Linear accelerations from forces (translation dynamics)
+        # center_of_mass_acceleration applies F=ma with gravity
         vx_dot, vy_dot = center_of_mass_acceleration(f, theta, phi)
 
-        # By definition:
-        # y_dot = vy
-        y_dot = vy
+        # Position derivatives equal velocities
+        y_dot = vy        # dy/dt = v_y
 
-        # By definition:
-        # theta_dot = omega
-        theta_dot = omega
+        # Angle derivative equals angular velocity
+        theta_dot = omega  # d(theta)/dt = omega
 
-        # Rotational dynamics:
-        # omega_dot = theta_ddot
+        # --- Dynamic equations (from Newton-Euler) ---
+
+        # Angular acceleration from torque (rotation dynamics)
+        # angular_acceleration applies torque = I * alpha
         omega_dot = angular_acceleration(f, phi)
 
-        # Return the full state derivative:
-        #
-        # s_dot = [
-        #   x_dot,
-        #   vx_dot,
-        #   y_dot,
-        #   vy_dot,
-        #   theta_dot,
-        #   omega_dot
-        # ]
+        # Assemble and return the full state derivative vector
+        # Order must match state vector: [x, vx, y, vy, theta, omega]
         return np.array([
-            x_dot,
-            vx_dot,
-            y_dot,
-            vy_dot,
-            theta_dot,
-            omega_dot,
+            x_dot,      # dx/dt
+            vx_dot,     # d(vx)/dt
+            y_dot,      # dy/dt
+            vy_dot,     # d(vy)/dt
+            theta_dot,  # d(theta)/dt
+            omega_dot,  # d(omega)/dt
         ])
 
     return (F,)
@@ -331,33 +403,40 @@ def _(mo):
 
 
 @app.cell
-def _(F, sci):
+def _(F, l, np, sci):
     def redstart_solve(t_span, y0, f_phi):
 
-        # Right-hand side of the ODE:
-        # s_dot = F(s, f, phi)
         def rhs(t, y):
-
-            # Current inputs
             f, phi = f_phi(t, y)
-
-            # Return the state derivative
             return F(y, f, phi)
 
-        # Numerical integration
+        def ground_hit(t, y):
+            return y[2] - l / 2
+
+        ground_hit.terminal  = True
+        ground_hit.direction = -1
+
         result = sci.solve_ivp(
-            rhs,
-            t_span,
-            y0,
+            rhs, t_span, y0,
             dense_output=True,
+            events=ground_hit,
         )
 
-        # Check integration success
         if not result.success:
             raise RuntimeError(result.message)
 
-        # result.sol is a function:
-        # sol(t) -> state at time t
+        if result.t_events[0].size > 0:
+            t_land = result.t_events[0][0]
+            _raw   = result.sol
+            def sol(t):
+                scalar = np.ndim(t) == 0
+                t_arr  = np.atleast_1d(np.asarray(t, dtype=float))
+                out    = _raw(np.minimum(t_arr, t_land))
+                if scalar:
+                    return out[:, 0]
+                return out
+            return sol
+
         return result.sol
 
     return (redstart_solve,)
@@ -524,7 +603,7 @@ def _(mo):
 def _():
     from svg import svg, transform, animate_transform
 
-    return
+    return animate_transform, svg, transform
 
 
 @app.cell(hide_code=True)
@@ -581,6 +660,50 @@ def _(mo):
     return
 
 
+@app.cell
+def _(svg, transform):
+    def world(view_box, *objects):
+        x_min, x_max, y_min, y_max = view_box
+        width  = x_max - x_min
+        height = y_max - y_min
+
+        return svg.svg(
+            viewBox=f"0 0 {width} {height}",
+            xmlns="http://www.w3.org/2000/svg",
+        )(
+            # Flip y-axis so y increases upward (SVG default is downward)
+            transform.translate(x=-x_min, y=y_max)(
+                transform.scale(x=1, y=-1)(
+                    # Sky background
+                    svg.rect(x=x_min, y=0,     width=width, height=y_max,  fill="lightblue"),
+                    # Ground
+                    svg.rect(x=x_min, y=y_min, width=width, height=-y_min, fill="tan"),
+                    # Landing pad: 2m wide, centered at x=0, sitting on y=0
+                    svg.rect(x=-1,    y=-0.1,  width=2,     height=0.1,    fill="green"),
+                    # Any extra objects passed by the caller
+                    *objects,
+                )
+            )
+        )
+
+    return (world,)
+
+
+@app.cell
+def _(mo, svg, world):
+    # Three test scenes: empty world, black square on pad, colored squares in corners
+    mo.hstack([
+        mo.Html(world([-3, 3, -2, 4])),
+        mo.Html(world([-3, 3, -2, 4], svg.rect(x=-1, y=0, width=2, height=2, fill="black"))),
+        mo.Html(world([-3, 3, -2, 4],
+            svg.rect(x=-3, y=2, width=2, height=2, fill="red"),
+            svg.rect(x=1,  y=2, width=2, height=2, fill="blue"),
+        )),
+    ], justify="space-around")
+
+    return
+
+
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
@@ -633,6 +756,55 @@ def _(mo):
     return
 
 
+@app.cell
+def _(M, g, l, np, svg, transform):
+    def booster(x, y, theta, f, phi):
+        body_width  = 0.16
+        flame_width = 0.12
+        # Flame length proportional to thrust: equals l/2 when f = Mg
+        flame_len   = (l / 2) * max(0.0, f / (M * g))
+
+        # Booster body: rectangle centered on the center of mass
+        body = svg.rect(
+            x=-body_width / 2, y=-l / 2,
+            width=body_width,  height=l,
+            rx=0.03, fill="black",
+        )
+
+        # Flame: attached at the base of the booster, rotated by phi relative to booster axis
+        flame = transform.translate(y=-l / 2)(
+            transform.rotate(a=np.degrees(phi))(
+                svg.rect(
+                    x=-flame_width / 2, y=-flame_len,
+                    width=flame_width,  height=flame_len,
+                    fill="orangered",
+                )
+            )
+        )
+
+        # Place and tilt the whole booster at position (x, y) with angle theta
+        return transform.translate(x=x, y=y)(
+            transform.rotate(a=np.degrees(theta))(
+                flame, body,
+            )
+        )
+
+    return (booster,)
+
+
+@app.cell
+def _(M, booster, g, l, mo, np, world):
+    # Left: booster at rest with no thrust
+    # Middle: booster with thrust f=Mg along its axis
+    # Right: booster tilted 45°, thrust 2Mg, nozzle rotated 90°
+    mo.hstack([
+        mo.Html(world([-3, 3, -2, 4], booster(0, l/2, 0, 0, 0))),
+        mo.Html(world([-3, 3, -2, 4], booster(0, l, 0, M*g, 0))),
+        mo.Html(world([-3, 3, -2, 4], booster(-l/2, l, np.pi/4, 2*M*g, np.pi/2))),
+    ], justify="space-around")
+    return
+
+
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
@@ -680,6 +852,64 @@ def _(mo):
     return
 
 
+@app.cell
+def _(M, animate_transform, g, l, np, svg, transform):
+    def booster_anim(x, y, theta, f, phi, T):
+        body_width  = 0.16
+        flame_width = 0.12
+
+        # Static booster body rectangle centered on center of mass
+        body = svg.rect(
+            x=-body_width / 2, y=-l / 2,
+            width=body_width,  height=l,
+            rx=0.03, fill="black",
+        )
+
+        # Animated flame: nozzle angle and length both change over time
+        flame = transform.translate(y=-l / 2)(
+            # Rotate flame by phi(t) relative to booster axis
+            animate_transform.rotate(a=lambda t: np.degrees(phi(t)), T=T)(
+                # Scale flame height proportionally to thrust f(t)
+                animate_transform.scale(
+                    x=1.0,
+                    y=lambda t: max(0.0, f(t) / (M * g)),
+                    T=T,
+                )(
+                    svg.rect(
+                        x=-flame_width / 2, y=-l / 2,
+                        width=flame_width,  height=l / 2,
+                        fill="orangered",
+                    )
+                )
+            )
+        )
+
+        # Animate position (x(t), y(t)) and tilt angle theta(t) of the whole booster
+        return animate_transform.translate(x=x, y=y, T=T)(
+            animate_transform.rotate(a=lambda t: np.degrees(theta(t)), T=T)(
+                flame, body,
+            )
+        )
+
+    return (booster_anim,)
+
+
+@app.cell
+def _(M, booster_anim, g, l, mo, np, world):
+    # Test: booster moves across the screen while spinning and increasing thrust over 5s
+    def booster_anim_0():
+        T = 5.0
+        def x(t):     return -l/2 + l * (t / T)
+        def y(t):     return l/2  + l/2 * (t / T)
+        def theta(t): return (t / T) * 2 * np.pi
+        def f(t):     return M * g * (t / T)
+        def phi(t):   return 2 * np.pi * (t / T)
+        return booster_anim(x, y, theta, f, phi, T=T)
+
+    mo.Html(world([-3, 3, -2, 4], booster_anim_0())).center()
+    return
+
+
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
@@ -695,6 +925,59 @@ def _(mo):
 
     4. The "controlled landing" scenario (see above).
     """)
+    return
+
+
+@app.cell
+def _(booster_anim, mo, redstart_solve, world):
+    def animated_simulation(t_span, y0, f_phi, view_box=[-3, 3, -2, 12]):
+        # Solve the ODE for the given scenario
+        sol = redstart_solve(t_span, y0, f_phi)
+        T   = t_span[1] - t_span[0]
+
+        # Extract each state variable and input as a function of time for the animator
+        def x(t):     return sol(t)[0]
+        def y(t):     return sol(t)[2]
+        def theta(t): return sol(t)[4]
+        def f(t):     return f_phi(t, sol(t))[0]
+        def phi(t):   return f_phi(t, sol(t))[1]
+
+        return mo.Html(world(view_box, booster_anim(x, y, theta, f, phi, T=T)))
+
+    return (animated_simulation,)
+
+
+@app.cell
+def _(animated_simulation, np):
+    # No thrust, no tilt: booster falls freely under gravity and stops when it hits the ground
+    def f_phi_1(t, y): return np.array([0.0, 0.0])
+    animated_simulation([0.0, 5.0], [0.0, 0.0, 10.0, 0.0, 0.0, 0.0], f_phi_1)
+    return
+
+
+@app.cell
+def _(M, animated_simulation, g, np):
+    # Thrust exactly equals gravity (f = Mg): booster hovers in place without moving
+    def f_phi_2(t, y): return np.array([M * g, 0.0])
+    animated_simulation([0.0, 5.0], [0.0, 0.0, 10.0, 0.0, 0.0, 0.0], f_phi_2)
+    return
+
+
+@app.cell
+def _(M, animated_simulation, g, np):
+    # Thrust f = Mg but nozzle angled at pi/8: booster drifts sideways while falling
+    def f_phi_3(t, y): return np.array([M * g, np.pi / 8])
+    animated_simulation([0.0, 5.0], [0.0, 0.0, 10.0, 0.0, 0.0, 0.0], f_phi_3)
+    return
+
+
+@app.cell
+def _(T, animated_simulation, f_landing, np):
+    # Controlled landing: time-varying thrust along the booster axis brings
+    # the booster smoothly to rest at ground level at t = 5s
+    def f_phi_4(t, y): return np.array([f_landing(t), 0.0])
+    animated_simulation([0.0, T], [0.0, 0.0, 10.0, -2.0, 0.0, 0.0], f_phi_4,
+                        view_box=[-3, 3, -1, 12])
     return
 
 
