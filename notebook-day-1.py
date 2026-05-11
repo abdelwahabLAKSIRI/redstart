@@ -71,7 +71,7 @@ def _():
     import numpy as np
     import numpy.linalg as la
 
-    return (np,)
+    return np, sci
 
 
 @app.cell(hide_code=True)
@@ -175,7 +175,7 @@ def _(M, force_components, g):
         y_ddot= fy/M - g
         return x_ddot,y_ddot
 
-    return
+    return (center_of_mass_acceleration,)
 
 
 @app.cell(hide_code=True)
@@ -211,7 +211,7 @@ def _(J, l, np):
         theta_ddot = - ((l/2)*f/J)*np.sin(phi)
         return theta_ddot
 
-    return
+    return (angular_acceleration,)
 
 
 @app.cell(hide_code=True)
@@ -238,8 +238,56 @@ def _(mo):
 
 
 @app.cell
-def _():
-    return
+def _(angular_acceleration, center_of_mass_acceleration, np):
+    # Dimension of the state space:
+    # s = [x, vx, y, vy, theta, omega]
+    n = 6
+
+    def F(s, f, phi):
+
+        # Unpack the state vector
+        x, vx, y, vy, theta, omega = s
+
+        # By definition:
+        # x_dot = vx
+        x_dot = vx
+
+        # Newton's second law for translation
+        # returns x_ddot and y_ddot
+        vx_dot, vy_dot = center_of_mass_acceleration(f, theta, phi)
+
+        # By definition:
+        # y_dot = vy
+        y_dot = vy
+
+        # By definition:
+        # theta_dot = omega
+        theta_dot = omega
+
+        # Rotational dynamics:
+        # omega_dot = theta_ddot
+        omega_dot = angular_acceleration(f, phi)
+
+        # Return the full state derivative:
+        #
+        # s_dot = [
+        #   x_dot,
+        #   vx_dot,
+        #   y_dot,
+        #   vy_dot,
+        #   theta_dot,
+        #   omega_dot
+        # ]
+        return np.array([
+            x_dot,
+            vx_dot,
+            y_dot,
+            vy_dot,
+            theta_dot,
+            omega_dot,
+        ])
+
+    return (F,)
 
 
 @app.cell(hide_code=True)
@@ -279,6 +327,39 @@ def _(mo):
     free_fall_example()
     ```
     """)
+    return
+
+
+@app.cell
+def _(F, sci):
+    def redstart_solve(t_span, y0, f_phi):
+
+        # Right-hand side of the ODE:
+        # s_dot = F(s, f, phi)
+        def rhs(t, y):
+
+            # Current inputs
+            f, phi = f_phi(t, y)
+
+            # Return the state derivative
+            return F(y, f, phi)
+
+        # Numerical integration
+        result = sci.solve_ivp(
+            rhs,
+            t_span,
+            y0,
+            dense_output=True,
+        )
+
+        # Check integration success
+        if not result.success:
+            raise RuntimeError(result.message)
+
+        # result.sol is a function:
+        # sol(t) -> state at time t
+        return result.sol
+
     return
 
 
