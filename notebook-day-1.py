@@ -133,7 +133,7 @@ def _():
     g= 1.0  #gravity constant, m/s^2
     M= 1.0 # booster mass , kg
     l = 2.0 # total booster lentgh, meters
-    return
+    return M, g, l
 
 
 @app.cell(hide_code=True)
@@ -153,7 +153,7 @@ def _(np):
         fy= f * np.cos(theta + phi)
         return fx,fy
 
-    return
+    return (force_components,)
 
 
 @app.cell(hide_code=True)
@@ -163,6 +163,18 @@ def _(mo):
 
     Give the ordinary differential equation that governs the evolution of the position $(x, y)$ of the center of mass of the booster.
     """)
+    return
+
+
+@app.cell
+def _(M, force_components, g):
+    def center_of_mass_acceleration(f,theta,phi):
+        fx, fy= force_components(f,theta,phi)
+
+        x_ddot=fx/M
+        y_ddot= fy/M - g
+        return x_ddot,y_ddot
+
     return
 
 
@@ -176,6 +188,13 @@ def _(mo):
     return
 
 
+@app.cell
+def _(M, l):
+    J = M * l**2 /12
+    J
+    return (J,)
+
+
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
@@ -183,6 +202,15 @@ def _(mo):
 
     Give the ordinary differential equation that governs the evolution of the tilt angle $\theta$.
     """)
+    return
+
+
+@app.cell
+def _(J, l, np):
+    def angular_acceleration(f,phi):
+        theta_ddot = - ((l/2)*f/J)*np.sin(phi)
+        return theta_ddot
+
     return
 
 
@@ -206,6 +234,11 @@ def _(mo):
     \dot{s} = F(s, f, \phi).
     $$
     """)
+    return
+
+
+@app.cell
+def _():
     return
 
 
