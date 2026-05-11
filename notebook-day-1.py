@@ -71,7 +71,7 @@ def _():
     import numpy as np
     import numpy.linalg as la
 
-    return
+    return (np,)
 
 
 @app.cell(hide_code=True)
@@ -128,6 +128,14 @@ def _(mo):
     return
 
 
+@app.cell
+def _():
+    g= 1.0  #gravity constant, m/s^2
+    M= 1.0 # booster mass , kg
+    l = 2.0 # total booster lentgh, meters
+    return
+
+
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
@@ -135,6 +143,16 @@ def _(mo):
 
     Compute the cartesian coordinates $f_x$ and $f_y$ of the force applied to the booster by the reactor, functions of $f$, $\theta$ and $\phi$.
     """)
+    return
+
+
+@app.cell
+def _(np):
+    def force_components(f,theta,phi):
+        fx= -f * np.sin(theta + phi)
+        fy= f * np.cos(theta + phi)
+        return fx,fy
+
     return
 
 
