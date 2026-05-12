@@ -3505,9 +3505,729 @@ def _(mo):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
+    ## We now design a controller using optimal control.
+
+    The reduced lateral model is
+
+    \[
+    \dot z
+    =
+    A_{\text{lat}}z+B_{\text{lat}}\Delta\phi,
+    \]
+
+    where
+
+    \[
+    z=
+    \begin{bmatrix}
+    \Delta x \\
+    \Delta \dot{x} \\
+    \Delta \theta \\
+    \Delta \dot{\theta}
+    \end{bmatrix}.
+    \]
+
+    We use a feedback law of the form
+
+    \[
+    \Delta\phi(t)
+    =
+    -K_{oc}z(t).
+    \]
+
+    The goal is to satisfy the same requirements as the pole-placement controller:
+
+    \[
+    \Delta x(t)\to0,
+    \quad
+    \Delta\theta(t)\to0,
+    \]
+
+    in about 20 seconds or less, while keeping
+
+    \[
+    |\Delta\theta(t)|<\frac{\pi}{2},
+    \quad
+    |\Delta\phi(t)|<\frac{\pi}{2}.
+    \]
+
+    To find \(K_{oc}\), we use the Linear Quadratic Regulator method. This method minimizes the cost
+
+    \[
+    J
+    =
+    \int_0^\infty
+    \left(
+    z(t)^TQz(t)+\Delta\phi(t)^TR\Delta\phi(t)
+    \right)dt.
+    \]
+
+    The matrix \(Q\) penalizes state errors, and \(R\) penalizes the control effort.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Choice of design parameters
+
+    We choose
+
+    \[
+    Q=
+    \operatorname{diag}(1,\ 0.1,\ 1,\ 0.1),
+    \]
+
+    and
+
+    \[
+    R=
+    \begin{bmatrix}
+    100
+    \end{bmatrix}.
+    \]
+
+    The larger weights in \(Q\) are placed on \(\Delta x\) and \(\Delta\theta\), because the goal is mainly to bring position and tilt back to zero.
+
+    The smaller weights are placed on \(\Delta\dot{x}\) and \(\Delta\dot{\theta}\), because velocities are important but less directly related to the final objective.
+
+    The value \(R=100\) penalizes large control angles. This helps keep
+
+    \[
+    |\Delta\phi(t)|<\frac{\pi}{2}.
+    \]
+
+    So the idea is:
+
+    - \(Q\) makes the controller correct the state errors;
+    - \(R\) prevents the controller from using an excessively large reactor angle.
+    """)
+    return
+
+
+@app.cell
+def _(A_lat, B_lat, np, scipy):
+    # Optimal Control Controller
+    # Prefix used in this section: oc_
+    #
+    # We use the LQR method:
+    #
+    # minimize integral of:
+    #     z.T Q z + phi.T R phi
+    #
+    # subject to:
+    #     z_dot = A_lat z + B_lat phi
+
+    oc_Q = np.diag([
+        1.0,   # penalty on dx
+        0.1,   # penalty on dx_dot
+        1.0,   # penalty on dtheta
+        0.1,   # penalty on dtheta_dot
+    ])
+
+    oc_R = np.array([[100.0]])  # penalty on dphi
+
+    # Solve the continuous-time algebraic Riccati equation:
+    #
+    # A.T P + P A - P B R^(-1) B.T P + Q = 0
+
+    oc_P = scipy.linalg.solve_continuous_are(
+        A_lat,
+        B_lat,
+        oc_Q,
+        oc_R,
+    )
+
+    # LQR gain:
+    #
+    # K = R^(-1) B.T P
+
+    oc_K = np.linalg.solve(
+        oc_R,
+        B_lat.T @ oc_P,
+    )
+
+    # Closed-loop matrix
+    oc_A_cl = A_lat - B_lat @ oc_K
+
+    # Closed-loop eigenvalues
+    oc_eigenvalues = np.linalg.eigvals(oc_A_cl)
+
+    print("Optimal-control gain K_oc:")
+    print(oc_K)
+
+    print("\nShape of K_oc:")
+    print(oc_K.shape)
+
+    print("\nClosed-loop eigenvalues:")
+    print(oc_eigenvalues)
+
+    print("\nReal parts:")
+    print(np.real(oc_eigenvalues))
+
+    if np.all(np.real(oc_eigenvalues) < 0):
+        print("\nConclusion:")
+        print("The optimal-control closed-loop system is asymptotically stable.")
+    else:
+        print("\nConclusion:")
+        print("The optimal-control closed-loop system is not asymptotically stable.")
+    return (oc_K,)
+
+
+@app.cell
+def _(A_lat, B_lat, np, oc_K, plt, scipy):
+    # Simulation of the optimal-control controller
+
+    oc_z0 = np.array([
+        0.0,        # dx(0)
+        0.0,        # dx_dot(0)
+        np.pi / 4,  # dtheta(0)
+        0.0,        # dtheta_dot(0)
+    ])
+
+    oc_t_span = [0.0, 20.0]
+
+    oc_t_grid = np.linspace(
+        oc_t_span[0],
+        oc_t_span[1],
+        1000,
+    )
+
+    def oc_rhs(t_current, z_current):
+        """
+        Closed-loop lateral dynamics with optimal-control controller.
+
+        Control law:
+            dphi = -K_oc z
+        """
+
+        oc_phi_current = float(-(oc_K @ z_current)[0])
+
+        return A_lat @ z_current + B_lat.flatten() * oc_phi_current
+
+
+    oc_solution = scipy.integrate.solve_ivp(
+        oc_rhs,
+        oc_t_span,
+        oc_z0,
+        dense_output=True,
+    )
+
+    oc_z_values = oc_solution.sol(oc_t_grid)
+
+    oc_x_values = oc_z_values[0]
+    oc_theta_values = oc_z_values[2]
+
+    oc_phi_values = np.array([
+        float(-(oc_K @ oc_z_values[:, oc_index])[0])
+        for oc_index in range(len(oc_t_grid))
+    ])
+
+    print("Final x:", oc_x_values[-1])
+    print("Final theta:", oc_theta_values[-1])
+
+    print("\nMax |theta|:", np.max(np.abs(oc_theta_values)))
+    print("Max |phi|:", np.max(np.abs(oc_phi_values)))
+
+
+    def oc_plot_results():
+        """
+        Plot x(t), theta(t), and phi(t) for the optimal-control controller.
+        """
+
+        oc_fig, oc_axes = plt.subplots(3, 1, figsize=(7, 10))
+
+        # Plot x(t)
+        oc_axes[0].plot(
+            oc_t_grid,
+            oc_x_values,
+            label=r"$\Delta x(t)$",
+        )
+        oc_axes[0].axhline(0.0, color="grey", linestyle="--")
+        oc_axes[0].set_title("Optimal control: lateral position")
+        oc_axes[0].set_xlabel("time")
+        oc_axes[0].set_ylabel(r"$\Delta x(t)$")
+        oc_axes[0].grid(True)
+        oc_axes[0].legend()
+
+        # Plot theta(t)
+        oc_axes[1].plot(
+            oc_t_grid,
+            oc_theta_values,
+            label=r"$\Delta\theta(t)$",
+        )
+        oc_axes[1].axhline(0.0, color="grey", linestyle="--")
+        oc_axes[1].axhline(np.pi / 2, color="grey", linestyle="--", label=r"$\pm \pi/2$")
+        oc_axes[1].axhline(-np.pi / 2, color="grey", linestyle="--")
+        oc_axes[1].set_title("Optimal control: tilt angle")
+        oc_axes[1].set_xlabel("time")
+        oc_axes[1].set_ylabel(r"$\Delta\theta(t)$")
+        oc_axes[1].grid(True)
+        oc_axes[1].legend()
+
+        # Plot phi(t)
+        oc_axes[2].plot(
+            oc_t_grid,
+            oc_phi_values,
+            label=r"$\Delta\phi(t)$",
+        )
+        oc_axes[2].axhline(np.pi / 2, color="grey", linestyle="--", label=r"$\pm \pi/2$")
+        oc_axes[2].axhline(-np.pi / 2, color="grey", linestyle="--")
+        oc_axes[2].set_title("Optimal control: control angle")
+        oc_axes[2].set_xlabel("time")
+        oc_axes[2].set_ylabel(r"$\Delta\phi(t)$")
+        oc_axes[2].grid(True)
+        oc_axes[2].legend()
+
+        oc_fig.tight_layout()
+
+        return oc_fig
+
+
+    oc_results_plot = oc_plot_results()
+    oc_results_plot
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Interpretation and final answer
+
+    Using optimal control, we obtain a gain matrix of the form
+
+    \[
+    K_{oc}
+    =
+    \begin{bmatrix}
+    k_x & k_{\dot{x}} & k_\theta & k_{\dot{\theta}}
+    \end{bmatrix}.
+    \]
+
+    With the chosen weights
+
+    \[
+    Q=
+    \operatorname{diag}(1,\ 0.1,\ 1,\ 0.1),
+    \]
+
+    and
+
+    \[
+    R=
+    \begin{bmatrix}
+    100
+    \end{bmatrix},
+    \]
+
+    the controller penalizes lateral position and tilt errors while avoiding very large control angles.
+
+    The closed-loop matrix is
+
+    \[
+    A_{\text{cl}}
+    =
+    A_{\text{lat}}-B_{\text{lat}}K_{oc}.
+    \]
+
+    The computed closed-loop eigenvalues have negative real parts, so the optimal-control closed-loop dynamics are asymptotically stable.
+
+    The simulation shows that
+
+    \[
+    \Delta x(t)\to0,
+    \quad
+    \Delta\theta(t)\to0,
+    \]
+
+    within the 20 second time window, while keeping
+
+    \[
+    |\Delta\theta(t)|<\frac{\pi}{2},
+    \quad
+    |\Delta\phi(t)|<\frac{\pi}{2}.
+    \]
+
+    Therefore, \(K_{oc}\) satisfies the same requirements as the pole-placement controller.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
     ## 🧩 Validation
 
     Test the two control strategies (pole placement and optimal control) on the "true" (nonlinear) model with an animation. Check that both controllers achieve their goal; otherwise, go back to the drawing board and tweak the design parameters until they do!
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## 🧩 Validation on the Nonlinear Model
+
+    We now test the two controllers on the true nonlinear model.
+
+    The two controllers are:
+
+    \[
+    K_{pp}
+    \]
+
+    from pole assignment, and
+
+    \[
+    K_{oc}
+    \]
+
+    from optimal control.
+
+    The nonlinear state is
+
+    \[
+    s=
+    \begin{bmatrix}
+    x \\
+    \dot{x} \\
+    y \\
+    \dot{y} \\
+    \theta \\
+    \dot{\theta}
+    \end{bmatrix}.
+    \]
+
+    The controllers use only the lateral state:
+
+    \[
+    z=
+    \begin{bmatrix}
+    x \\
+    \dot{x} \\
+    \theta \\
+    \dot{\theta}
+    \end{bmatrix}.
+    \]
+
+    The control law is
+
+    \[
+    \phi(t)=-Kz(t).
+    \]
+
+    Since these controllers were designed for the lateral model with \(f=Mg\), we keep
+
+    \[
+    f(t)=Mg.
+    \]
+
+    The goal of this validation is to check whether the nonlinear model also satisfies:
+
+    \[
+    x(t)\to0,
+    \quad
+    \theta(t)\to0,
+    \]
+
+    while keeping
+
+    \[
+    |\theta(t)|<\frac{\pi}{2},
+    \quad
+    |\phi(t)|<\frac{\pi}{2}.
+    \]
+
+    The vertical motion is not controlled here; the validation focuses on lateral stabilization and tilt stabilization.
+    """)
+    return
+
+
+@app.cell
+def _(M, g, np, redstart_solve):
+    # Validation on the true nonlinear model
+    # Prefix used in this section: val_
+    #
+    # This helper function tests a controller K on the nonlinear model.
+    #
+    # The controller uses:
+    # z = [x, x_dot, theta, theta_dot]
+    #
+    # The control law is:
+    # phi = -K z
+    #
+    # The thrust is kept fixed at:
+    # f = M*g
+
+    def val_simulate_nonlinear_controller(val_K, val_controller_name):
+        val_t_span = [0.0, 20.0]
+
+        # Initial condition for the nonlinear model:
+        # state = [x, vx, y, vy, theta, omega]
+        #
+        # We choose y(0)=20 so the booster remains visible during the animation.
+        val_y0 = np.array([
+            0.0,          # x(0)
+            0.0,          # vx(0)
+            20.0,         # y(0)
+            0.0,          # vy(0)
+            np.pi / 4,    # theta(0)
+            0.0,          # omega(0)
+        ])
+
+        def val_f_phi(t_current, state_current):
+            x_current = state_current[0]
+            vx_current = state_current[1]
+            theta_current = state_current[4]
+            omega_current = state_current[5]
+
+            val_z_current = np.array([
+                x_current,
+                vx_current,
+                theta_current,
+                omega_current,
+            ])
+
+            # Control law:
+            # phi = -K z
+            phi_current = float(-(val_K @ val_z_current)[0])
+
+            # The controllers were designed with f = M*g
+            f_current = M * g
+
+            return np.array([
+                f_current,
+                phi_current,
+            ])
+
+        # Simulate the true nonlinear model
+        val_solution = redstart_solve(
+            val_t_span,
+            val_y0,
+            val_f_phi,
+        )
+
+        val_t_grid = np.linspace(
+            val_t_span[0],
+            val_t_span[1],
+            1000,
+        )
+
+        val_state_values = val_solution(val_t_grid)
+
+        val_x_values = val_state_values[0]
+        val_y_values = val_state_values[2]
+        val_theta_values = val_state_values[4]
+
+        val_phi_values = np.array([
+            val_f_phi(val_t_grid[val_index], val_state_values[:, val_index])[1]
+            for val_index in range(len(val_t_grid))
+        ])
+
+        print(val_controller_name)
+        print("Final x:", val_x_values[-1])
+        print("Final theta:", val_theta_values[-1])
+        print("Final y:", val_y_values[-1])
+        print("Max |theta|:", np.max(np.abs(val_theta_values)))
+        print("Max |phi|:", np.max(np.abs(val_phi_values)))
+
+        if (
+            np.max(np.abs(val_theta_values)) < np.pi / 2
+            and np.max(np.abs(val_phi_values)) < np.pi / 2
+        ):
+            print("Constraint check: satisfied.")
+        else:
+            print("Constraint check: not satisfied. Design parameters should be changed.")
+
+        if (
+            abs(val_x_values[-1]) < 0.2
+            and abs(val_theta_values[-1]) < 0.02
+        ):
+            print("Goal check: approximately achieved.")
+        else:
+            print("Goal check: not achieved well enough. Design parameters should be changed.")
+
+        return val_solution, val_t_span, val_t_grid, val_state_values, val_phi_values
+
+    return (val_simulate_nonlinear_controller,)
+
+
+@app.cell
+def _(
+    M,
+    booster_anim,
+    g,
+    mo,
+    np,
+    pp_K,
+    val_simulate_nonlinear_controller,
+    world,
+):
+    # Validate pole-placement controller on the nonlinear model
+
+    (
+        val_pp_solution,
+        val_pp_t_span,
+        val_pp_t_grid,
+        val_pp_state_values,
+        val_pp_phi_values,
+    ) = val_simulate_nonlinear_controller(
+        pp_K,
+        "Pole-placement controller",
+    )
+
+    # Animation for pole-placement controller
+
+    def val_pp_animation():
+        def val_pp_x(t):
+            return val_pp_solution(t)[0]
+
+        def val_pp_y(t):
+            return val_pp_solution(t)[2]
+
+        def val_pp_theta(t):
+            return val_pp_solution(t)[4]
+
+        def val_pp_f(t):
+            return M * g
+
+        def val_pp_phi(t):
+            val_state = val_pp_solution(t)
+
+            val_z = np.array([
+                val_state[0],
+                val_state[1],
+                val_state[4],
+                val_state[5],
+            ])
+
+            return float(-(pp_K @ val_z)[0])
+
+        return mo.Html(
+            world(
+                [-5, 5, -2, 22],
+                booster_anim(
+                    val_pp_x,
+                    val_pp_y,
+                    val_pp_theta,
+                    val_pp_f,
+                    val_pp_phi,
+                    T=val_pp_t_span[1],
+                ),
+            )
+        ).center()
+
+
+    val_pp_animation()
+    return
+
+
+@app.cell
+def _(
+    M,
+    booster_anim,
+    g,
+    mo,
+    np,
+    oc_K,
+    val_simulate_nonlinear_controller,
+    world,
+):
+    # Validate optimal-control controller on the nonlinear model
+
+    (
+        val_oc_solution,
+        val_oc_t_span,
+        val_oc_t_grid,
+        val_oc_state_values,
+        val_oc_phi_values,
+    ) = val_simulate_nonlinear_controller(
+        oc_K,
+        "Optimal-control controller",
+    )
+
+    # Animation for optimal-control controller
+
+    def val_oc_animation():
+        def val_oc_x(t):
+            return val_oc_solution(t)[0]
+
+        def val_oc_y(t):
+            return val_oc_solution(t)[2]
+
+        def val_oc_theta(t):
+            return val_oc_solution(t)[4]
+
+        def val_oc_f(t):
+            return M * g
+
+        def val_oc_phi(t):
+            val_state = val_oc_solution(t)
+
+            val_z = np.array([
+                val_state[0],
+                val_state[1],
+                val_state[4],
+                val_state[5],
+            ])
+
+            return float(-(oc_K @ val_z)[0])
+
+        return mo.Html(
+            world(
+                [-5, 5, -2, 22],
+                booster_anim(
+                    val_oc_x,
+                    val_oc_y,
+                    val_oc_theta,
+                    val_oc_f,
+                    val_oc_phi,
+                    T=val_oc_t_span[1],
+                ),
+            )
+        ).center()
+
+
+    val_oc_animation()
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Interpretation
+
+    The two controllers are tested on the nonlinear model using the same feedback law:
+
+    \[
+    \phi(t)=-Kz(t).
+    \]
+
+    For both controllers, the printed values allow us to check:
+
+    \[
+    x(t)\to0,
+    \quad
+    \theta(t)\to0,
+    \]
+
+    and the constraints
+
+    \[
+    |\theta(t)|<\frac{\pi}{2},
+    \quad
+    |\phi(t)|<\frac{\pi}{2}.
+    \]
+
+    If the final values of \(x\) and \(\theta\) are close to zero and the maximum values of \(|\theta|\) and \(|\phi|\) remain below \(\pi/2\), then the controller achieves its goal on the nonlinear model.
+
+    If one of these checks fails, then the design parameters must be changed:
+
+    - for pole placement, choose different poles;
+    - for optimal control, modify \(Q\) and \(R\).
+
+    In this validation, the vertical motion is not controlled because the controllers were designed only for lateral stabilization.
     """)
     return
 
