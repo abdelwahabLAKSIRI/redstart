@@ -2189,6 +2189,158 @@ def _(mo):
     return
 
 
+@app.cell
+def _(A_lat, B_lat, np, scipy):
+    # We choose desired closed-loop poles.
+    # All poles are negative, so the closed-loop system should be stable.
+    # The values are small enough to keep the response smooth.
+    desired_poles_pp = np.array([
+        -0.35,
+        -0.45,
+        -0.55,
+        -0.65,
+    ])
+
+    # Pole placement gives K_pp such that:
+    # eigenvalues(A_lat - B_lat @ K_pp) = desired_poles_pp
+    pole_result_pp = scipy.signal.place_poles(
+        A_lat,
+        B_lat,
+        desired_poles_pp,
+    )
+
+    K_pp = pole_result_pp.gain_matrix
+
+    print("K_pp =")
+    print(K_pp)
+
+    print("Closed-loop eigenvalues:")
+    print(np.linalg.eigvals(A_lat - B_lat @ K_pp))
+    return (K_pp,)
+
+
+@app.cell
+def _(A_lat, B_lat, K_pp, np, plt, scipy, t, t_span, z0):
+    # Closed-loop dynamics with pole-placement controller
+    def rhs_pole_placement(t_current, z_current):
+
+        # Control law:
+        # phi = -K_pp z
+        phi_current = float(-(K_pp @ z_current)[0])
+
+        return A_lat @ z_current + B_lat.flatten() * phi_current
+
+
+    # Simulate the system
+    result_pp = scipy.integrate.solve_ivp(
+        rhs_pole_placement,
+        t_span,
+        z0,
+        dense_output=True,
+    )
+
+    # Evaluate solution
+    z_pp = result_pp.sol(t)
+
+    x_pp = z_pp[0]
+    theta_pp = z_pp[2]
+
+    # Compute phi(t)
+    phi_pp = np.array([
+        float(-(K_pp @ z_pp[:, i])[0])
+        for i in range(len(t))
+    ])
+
+    # Plot x(t)
+    plt.plot(t, x_pp, label=r"$\Delta x(t)$")
+    plt.axhline(0.0, color="grey", ls="--")
+    plt.title("Pole placement: lateral position")
+    plt.xlabel("time")
+    plt.ylabel(r"$\Delta x$")
+    plt.grid(True)
+    plt.legend()
+    plt.show()
+
+    # Plot theta(t)
+    plt.plot(t, theta_pp, label=r"$\Delta \theta(t)$")
+    plt.axhline(0.0, color="grey", ls="--")
+    plt.axhline(np.pi / 2, color="grey", ls="--")
+    plt.axhline(-np.pi / 2, color="grey", ls="--")
+    plt.title("Pole placement: tilt")
+    plt.xlabel("time")
+    plt.ylabel(r"$\Delta \theta$")
+    plt.grid(True)
+    plt.legend()
+    plt.show()
+
+    # Plot phi(t)
+    plt.plot(t, phi_pp, label=r"$\Delta \phi(t)$")
+    plt.axhline(np.pi / 2, color="grey", ls="--")
+    plt.axhline(-np.pi / 2, color="grey", ls="--")
+    plt.title("Pole placement: control angle")
+    plt.xlabel("time")
+    plt.ylabel(r"$\Delta \phi$")
+    plt.grid(True)
+    plt.legend()
+    plt.show()
+
+    print("max |theta| =", np.max(np.abs(theta_pp)))
+    print("max |phi|   =", np.max(np.abs(phi_pp)))
+    print("final x     =", x_pp[-1])
+    print("final theta =", theta_pp[-1])
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Answer
+
+    I use pole placement to choose \(K_{pp}\). The idea is to choose the eigenvalues of the closed-loop matrix:
+
+    \[
+    A_{\text{lat}} - B_{\text{lat}}K_{pp}.
+    \]
+
+    I choose the poles:
+
+    \[
+    -0.35,\quad -0.45,\quad -0.55,\quad -0.65.
+    \]
+
+    They are all negative, so the closed-loop system is asymptotically stable.
+
+    With the computed gain \(K_{pp}\), both:
+
+    \[
+    \Delta \theta(t) \to 0
+    \]
+
+    and:
+
+    \[
+    \Delta x(t) \to 0
+    \]
+
+    in about 20 seconds or less.
+
+    Also, during the simulation:
+
+    \[
+    |\Delta \theta(t)|<\frac{\pi}{2}
+    \]
+
+    and:
+
+    \[
+    |\Delta \phi(t)|<\frac{\pi}{2}.
+    \]
+
+    So pole placement improves the manual controller because now it stabilizes both the tilt and the lateral position.
+    """)
+    return
+
+
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
