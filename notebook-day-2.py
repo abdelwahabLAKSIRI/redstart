@@ -1302,6 +1302,170 @@ def _(mo):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
+    ### 🔓 Solution
+
+    We want to write the linearized system as:
+
+    \[
+    \dot{s}=As+Bu.
+    \]
+
+    The state vector is:
+
+    \[
+    s=
+    \begin{bmatrix}
+    \Delta x \\
+    \Delta \dot{x} \\
+    \Delta y \\
+    \Delta \dot{y} \\
+    \Delta \theta \\
+    \Delta \dot{\theta}
+    \end{bmatrix}
+    \]
+
+    and the input vector is:
+
+    \[
+    u=
+    \begin{bmatrix}
+    \Delta f \\
+    \Delta \phi
+    \end{bmatrix}.
+    \]
+
+    From the linearized model:
+
+    \[
+    \Delta \dot{x}
+    =
+    \Delta \dot{x}
+    \]
+
+    \[
+    \Delta \ddot{x}
+    =
+    -g\Delta\theta-g\Delta\phi
+    \]
+
+    \[
+    \Delta \dot{y}
+    =
+    \Delta \dot{y}
+    \]
+
+    \[
+    \Delta \ddot{y}
+    =
+    \frac{1}{M}\Delta f
+    \]
+
+    \[
+    \Delta \dot{\theta}
+    =
+    \Delta \dot{\theta}
+    \]
+
+    \[
+    \Delta \ddot{\theta}
+    =
+    -\frac{Mg\ell}{2J}\Delta\phi.
+    \]
+
+    So, row by row:
+
+    \[
+    \dot{s}_1 = s_2
+    \]
+
+    \[
+    \dot{s}_2 = -g s_5 - g u_2
+    \]
+
+    \[
+    \dot{s}_3 = s_4
+    \]
+
+    \[
+    \dot{s}_4 = \frac{1}{M}u_1
+    \]
+
+    \[
+    \dot{s}_5 = s_6
+    \]
+
+    \[
+    \dot{s}_6 = -\frac{Mg\ell}{2J}u_2
+    \]
+
+    Therefore:
+
+    \[
+    A=
+    \begin{bmatrix}
+    0 & 1 & 0 & 0 & 0 & 0 \\
+    0 & 0 & 0 & 0 & -g & 0 \\
+    0 & 0 & 0 & 1 & 0 & 0 \\
+    0 & 0 & 0 & 0 & 0 & 0 \\
+    0 & 0 & 0 & 0 & 0 & 1 \\
+    0 & 0 & 0 & 0 & 0 & 0
+    \end{bmatrix}
+    \]
+
+    and:
+
+    \[
+    B=
+    \begin{bmatrix}
+    0 & 0 \\
+    0 & -g \\
+    0 & 0 \\
+    \frac{1}{M} & 0 \\
+    0 & 0 \\
+    0 & -\frac{Mg\ell}{2J}
+    \end{bmatrix}.
+    \]
+    """)
+    return
+
+
+@app.cell
+def _(J, M, g, l, np):
+    # State:
+    # s = [dx, dvx, dy, dvy, dtheta, domega]
+
+    A = np.array([
+        [0, 1, 0, 0,  0, 0],
+        [0, 0, 0, 0, -g, 0],
+        [0, 0, 0, 1,  0, 0],
+        [0, 0, 0, 0,  0, 0],
+        [0, 0, 0, 0,  0, 1],
+        [0, 0, 0, 0,  0, 0],
+    ])
+
+    # Inputs:
+    # u = [df, dphi]
+
+    B = np.array([
+        [0,       0],
+        [0,      -g],
+        [0,       0],
+        [1/M,     0],
+        [0,       0],
+        [0, -(M*g*l)/(2*J)],
+    ])
+
+    print("A =")
+    print(A)
+
+    print("B =")
+    print(B)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
     ## 🧩 Stability
 
     Is the generic equilibrium asymptotically stable?
