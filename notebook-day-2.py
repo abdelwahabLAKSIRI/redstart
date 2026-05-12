@@ -1087,6 +1087,92 @@ def _(mo):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
+    ### 🔓 Solution
+
+    At equilibrium, the booster does not move or rotate:
+
+    \[
+    \ddot{x}=0,
+    \quad
+    \ddot{y}=0,
+    \quad
+    \ddot{\theta}=0.
+    \]
+
+    From the model:
+
+    \[
+    \ddot{\theta}
+    =
+    -\frac{f}{J}\frac{\ell}{2}\sin(\phi)=0
+    \]
+
+    and since \(f>0\),
+
+    \[
+    \sin(\phi)=0
+    \quad \Rightarrow \quad
+    \phi=0
+    \]
+
+    because:
+
+    \[
+    |\phi|<\pi/2.
+    \]
+
+    Then:
+
+    \[
+    \ddot{x}
+    =
+    -\frac{f}{M}\sin(\theta)=0
+    \]
+
+    \[
+    \Rightarrow
+    \sin(\theta)=0
+    \quad \Rightarrow \quad
+    \theta=0
+    \]
+
+    since:
+
+    \[
+    |\theta|<\pi/2.
+    \]
+
+    Finally:
+
+    \[
+    \ddot{y}
+    =
+    \frac{f}{M}-g=0
+    \]
+
+    \[
+    \Rightarrow
+    f=Mg.
+    \]
+
+    Therefore, the equilibrium is:
+
+    \[
+    \theta=0,
+    \quad
+    \phi=0,
+    \quad
+    f=Mg,
+    \]
+
+    with zero velocities. The positions \(x\) and \(y\) can be any constants.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
     ## 🧩 Linearized Model
 
     Introduce the error variables $\Delta x$, $\Delta y$, $\Delta \theta$, and $\Delta f$ and $\Delta \phi$ of the state and input values with respect to the generic equilibrium configuration.
