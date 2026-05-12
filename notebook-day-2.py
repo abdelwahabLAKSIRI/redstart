@@ -1755,7 +1755,7 @@ def _(J, M, controllability_matrix, g, l, np):
         print("The reduced lateral model is controllable.")
     else:
         print("The reduced lateral model is not controllable.")
-    return
+    return A_lat, B_lat
 
 
 @app.cell(hide_code=True)
@@ -1768,6 +1768,131 @@ def _(mo):
     - $\phi(t)=0$ at all times.
 
     What do you see? How do you explain it?
+    """)
+    return
+
+
+@app.cell
+def _(A_lat, B_lat, np, plt, scipy):
+    # Initial state of the reduced lateral model:
+    # z = [x, vx, theta, omega]
+    z0 = np.array([
+        0.0,        # x(0)
+        0.0,        # vx(0)
+        np.pi / 4, # theta(0)
+        0.0,        # omega(0)
+    ])
+
+    # Simulation time
+    t_span = [0.0, 20.0]
+
+    # In this question, phi(t) = 0 all the time
+    def rhs_free_fall(t, z):
+        phi = 0.0
+        return A_lat @ z + B_lat.flatten() * phi
+
+    # Solve the linear system
+    result = scipy.integrate.solve_ivp(
+        rhs_free_fall,
+        t_span,
+        z0,
+        dense_output=True,
+    )
+
+    # Time grid for plotting
+    t = np.linspace(t_span[0], t_span[1], 1000)
+
+    # Evaluate the solution
+    z_t = result.sol(t)
+
+    # Extract x(t) and theta(t)
+    x_t = z_t[0]
+    theta_t = z_t[2]
+
+    # Plot x(t)
+    plt.plot(t, x_t, label=r"$x(t)$")
+    plt.title("Linear model in free fall: lateral position")
+    plt.xlabel("time")
+    plt.ylabel(r"$x(t)$")
+    plt.grid(True)
+    plt.legend()
+    plt.show()
+
+    # Plot theta(t)
+    plt.plot(t, theta_t, label=r"$\theta(t)$")
+    plt.title("Linear model in free fall: tilt angle")
+    plt.xlabel("time")
+    plt.ylabel(r"$\theta(t)$")
+    plt.grid(True)
+    plt.legend()
+    plt.show()
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### What do we observe?
+
+    The angle \(\theta(t)\) stays constant during the whole simulation at:
+
+    \[
+    \theta(t)=\frac{\pi}{4}.
+    \]
+
+    The position \(x(t)\) keeps moving away from zero and follows a parabolic curve.
+
+    ### Explanation
+
+    Since:
+
+    \[
+    \phi(t)=0,
+    \]
+
+    we have:
+
+    \[
+    \ddot{\theta}=0.
+    \]
+
+    Also, the initial angular velocity is zero:
+
+    \[
+    \dot{\theta}(0)=0.
+    \]
+
+    Therefore, the angle does not change and stays equal to:
+
+    \[
+    \theta(t)=\frac{\pi}{4}.
+    \]
+
+    For the lateral motion:
+
+    \[
+    \ddot{x}
+    =
+    -g\theta-g\phi.
+    \]
+
+    Because:
+
+    \[
+    \phi=0
+    \quad \text{and} \quad
+    \theta=\frac{\pi}{4},
+    \]
+
+    we obtain a constant lateral acceleration:
+
+    \[
+    \ddot{x}
+    =
+    -g\frac{\pi}{4}.
+    \]
+
+    So the booster keeps accelerating sideways, which explains why \(x(t)\) grows like a parabola instead of returning to zero.
     """)
     return
 
