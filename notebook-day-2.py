@@ -1826,7 +1826,7 @@ def _(A_lat, B_lat, np, plt, scipy):
     plt.grid(True)
     plt.legend()
     plt.show()
-    return
+    return t, t_span, z0
 
 
 @app.cell(hide_code=True)
@@ -1934,6 +1934,218 @@ def _(mo):
     Explain your thought process, show your iterative guesses and simulations!
 
     Is your final closed-loop model asymptotically stable?
+    """)
+    return
+
+
+@app.cell
+def _(A_lat, B_lat, np, plt, scipy, t, t_span, z0):
+    # We test several manual gains of the form:
+    # K = [0, 0, k_theta, k_omega]
+    #
+    # The first two coefficients are zero because, in this question,
+    # we do not care about stabilizing x and vx.
+    candidate_gains = [
+        np.array([[0.0, 0.0, -0.10, -0.30]]),
+        np.array([[0.0, 0.0, -0.30, -0.70]]),
+        np.array([[0.0, 0.0, -0.50, -1.00]]),
+    ]
+
+    # Try each candidate gain
+    for K_test in candidate_gains:
+
+        # Closed-loop dynamics for this particular gain
+        def rhs_manual_test(t_current, z_current):
+
+            # Control law:
+            # phi = -K z
+            phi_current = float(-(K_test @ z_current)[0])
+
+            # Linear closed-loop system:
+            # z_dot = A_lat z + B_lat phi
+            return A_lat @ z_current + B_lat.flatten() * phi_current
+
+        # Simulate the system with this gain
+        result_manual_test = scipy.integrate.solve_ivp(
+            rhs_manual_test,
+            t_span,
+            z0,
+            dense_output=True,
+        )
+
+        # Evaluate the solution on the time grid
+        z_manual_test = result_manual_test.sol(t)
+
+        # Extract theta(t)
+        theta_manual_test = z_manual_test[2]
+
+        # Recompute phi(t) over time
+        phi_manual_test = np.array([
+            float(-(K_test @ z_manual_test[:, i])[0])
+            for i in range(len(t))
+        ])
+
+        # Print useful checks
+        print("K =", K_test)
+        print("max |theta| =", np.max(np.abs(theta_manual_test)))
+        print("max |phi|   =", np.max(np.abs(phi_manual_test)))
+        print("closed-loop eigenvalues:")
+        print(np.linalg.eigvals(A_lat - B_lat @ K_test))
+        print()
+
+        # Plot theta(t) for this gain
+        plt.plot(
+            t,
+            theta_manual_test,
+            label=f"K={K_test[0,2]:.2f}, {K_test[0,3]:.2f}"
+        )
+
+    # Safety limits for theta
+    plt.axhline(np.pi / 2, color="grey", ls="--")
+    plt.axhline(-np.pi / 2, color="grey", ls="--")
+
+    plt.title("Manual tuning: tilt angle")
+    plt.xlabel("time")
+    plt.ylabel(r"$\Delta \theta(t)$")
+    plt.grid(True)
+    plt.legend()
+    plt.show()
+    return
+
+
+@app.cell
+def _(A_lat, B_lat, np, plt, scipy, t, t_span, z0):
+    # Final manual choice after testing the candidates
+    K_manual = np.array([[0.0, 0.0, -0.50, -1.00]])
+
+    # Closed-loop dynamics with the final gain
+    def rhs_manual_final(t_current, z_current):
+
+        # Control law:
+        # phi = -K_manual z
+        phi_current = float(-(K_manual @ z_current)[0])
+
+        # Linear closed-loop system
+        return A_lat @ z_current + B_lat.flatten() * phi_current
+
+    # Simulate the final controller
+    result_manual_final = scipy.integrate.solve_ivp(
+        rhs_manual_final,
+        t_span,
+        z0,
+        dense_output=True,
+    )
+
+    # Evaluate the solution
+    z_manual_final = result_manual_final.sol(t)
+
+    # Extract the variables we want to plot
+    x_manual_final = z_manual_final[0]
+    theta_manual_final = z_manual_final[2]
+
+    # Compute the control angle phi(t)
+    phi_manual_final = np.array([
+        float(-(K_manual @ z_manual_final[:, i])[0])
+        for i in range(len(t))
+    ])
+
+    # Plot theta(t)
+    plt.plot(t, theta_manual_final, label=r"$\Delta \theta(t)$")
+    plt.axhline(np.pi / 2, color="grey", ls="--")
+    plt.axhline(-np.pi / 2, color="grey", ls="--")
+    plt.title("Final manual controller: tilt")
+    plt.xlabel("time")
+    plt.ylabel(r"$\Delta \theta$")
+    plt.grid(True)
+    plt.legend()
+    plt.show()
+
+    # Plot phi(t)
+    plt.plot(t, phi_manual_final, label=r"$\Delta \phi(t)$")
+    plt.axhline(np.pi / 2, color="grey", ls="--")
+    plt.axhline(-np.pi / 2, color="grey", ls="--")
+    plt.title("Final manual controller: control angle")
+    plt.xlabel("time")
+    plt.ylabel(r"$\Delta \phi$")
+    plt.grid(True)
+    plt.legend()
+    plt.show()
+
+    # Plot x(t)
+    plt.plot(t, x_manual_final, label=r"$\Delta x(t)$")
+    plt.title("Final manual controller: lateral position")
+    plt.xlabel("time")
+    plt.ylabel(r"$\Delta x$")
+    plt.grid(True)
+    plt.legend()
+    plt.show()
+
+    # Final numerical checks
+    print("Final K:")
+    print(K_manual)
+
+    print("Closed-loop eigenvalues:")
+    print(np.linalg.eigvals(A_lat - B_lat @ K_manual))
+
+    print("max |theta| =", np.max(np.abs(theta_manual_final)))
+    print("max |phi|   =", np.max(np.abs(phi_manual_final)))
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Answer
+
+    I tried a few values for the two missing coefficients in:
+
+    \[
+    K=
+    \begin{bmatrix}
+    0 & 0 & ? & ?
+    \end{bmatrix}.
+    \]
+
+    The idea is to use only the angle and angular velocity:
+
+    \[
+    \Delta \phi(t)
+    =
+    -K
+    \begin{bmatrix}
+    \Delta x\\
+    \Delta \dot{x}\\
+    \Delta \theta\\
+    \Delta \dot{\theta}
+    \end{bmatrix}.
+    \]
+
+    After testing a few gains, I keep:
+
+    \[
+    K=
+    \begin{bmatrix}
+    0 & 0 & -0.5 & -1.0
+    \end{bmatrix}.
+    \]
+
+    With this choice, \(\Delta \theta(t)\) goes back close to zero in less than 20 seconds.
+
+    Also, during the simulation:
+
+    \[
+    |\Delta \theta(t)|<\frac{\pi}{2}
+    \]
+
+    and:
+
+    \[
+    |\Delta \phi(t)|<\frac{\pi}{2}.
+    \]
+
+    So the controller works for the angle.
+
+    However, the final closed-loop system is **not asymptotically stable** for the full lateral state, because the controller does not use \(\Delta x\) or \(\Delta \dot{x}\). So the angle is stabilized, but the lateral position can still drift.
     """)
     return
 
