@@ -1460,7 +1460,7 @@ def _(J, M, g, l, np):
 
     print("B =")
     print(B)
-    return (A,)
+    return A, B
 
 
 @app.cell(hide_code=True)
@@ -1528,6 +1528,81 @@ def _(mo):
 
     Is the linearized model controllable?
     """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### 🔓 Solution
+
+    To check controllability, we build the Kalman controllability matrix:
+
+    \[
+    \mathcal{C}
+    =
+    \begin{bmatrix}
+    B & AB & A^2B & \cdots & A^{n-1}B
+    \end{bmatrix}.
+    \]
+
+    Here the state dimension is:
+
+    \[
+    n=6.
+    \]
+
+    So the linearized model is controllable if:
+
+    \[
+    \text{rank}(\mathcal{C})=6.
+    \]
+
+    This means that the two inputs:
+
+    \[
+    \Delta f,
+    \quad
+    \Delta \phi
+    \]
+
+    are enough to control all the state variables near the equilibrium.
+    """)
+    return
+
+
+@app.cell
+def _(A, B, np):
+    def controllability_matrix(A, B):
+        # Number of state variables
+        n = A.shape[0]
+
+        # Start with B
+        C = B
+
+        # Add AB, A^2B, ..., A^(n-1)B
+        for k in range(1, n):
+            C = np.column_stack([
+                C,
+                np.linalg.matrix_power(A, k) @ B,
+            ])
+
+        return C
+
+
+    # Build the controllability matrix
+    C = controllability_matrix(A, B)
+
+    # Compute its rank
+    rank_C = np.linalg.matrix_rank(C)
+
+    print("Rank of controllability matrix:", rank_C)
+    print("State dimension:", A.shape[0])
+
+    if rank_C == A.shape[0]:
+        print("The linearized model is controllable.")
+    else:
+        print("The linearized model is not controllable.")
     return
 
 
