@@ -1603,7 +1603,7 @@ def _(A, B, np):
         print("The linearized model is controllable.")
     else:
         print("The linearized model is not controllable.")
-    return
+    return (controllability_matrix,)
 
 
 @app.cell(hide_code=True)
@@ -1617,6 +1617,144 @@ def _(mo):
 
     - Check the controllability of this new system.
     """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### 🔓 Solution
+
+    Now we only study lateral motion and tilt.
+
+    So we keep:
+
+    \[
+    \Delta x,
+    \quad
+    \Delta \dot{x},
+    \quad
+    \Delta \theta,
+    \quad
+    \Delta \dot{\theta}.
+    \]
+
+    We ignore \(y\) and \(\dot y\) for now.
+
+    We also fix the thrust magnitude:
+
+    \[
+    f = Mg
+    \]
+
+    and use only the reactor angle as input:
+
+    \[
+    u = \Delta \phi.
+    \]
+
+    From the linearized model:
+
+    \[
+    \Delta \ddot{x}
+    =
+    -g\Delta \theta - g\Delta \phi
+    \]
+
+    and
+
+    \[
+    \Delta \ddot{\theta}
+    =
+    -\frac{Mg\ell}{2J}\Delta\phi.
+    \]
+
+    So the reduced state is:
+
+    \[
+    z=
+    \begin{bmatrix}
+    \Delta x\\
+    \Delta \dot{x}\\
+    \Delta \theta\\
+    \Delta \dot{\theta}
+    \end{bmatrix}.
+    \]
+
+    The reduced model is:
+
+    \[
+    \dot z = A_{\text{lat}} z + B_{\text{lat}} u.
+    \]
+
+    Therefore:
+
+    \[
+    A_{\text{lat}}
+    =
+    \begin{bmatrix}
+    0 & 1 & 0 & 0\\
+    0 & 0 & -g & 0\\
+    0 & 0 & 0 & 1\\
+    0 & 0 & 0 & 0
+    \end{bmatrix}
+    \]
+
+    and:
+
+    \[
+    B_{\text{lat}}
+    =
+    \begin{bmatrix}
+    0\\
+    -g\\
+    0\\
+    -\frac{Mg\ell}{2J}
+    \end{bmatrix}.
+    \]
+    """)
+    return
+
+
+@app.cell
+def _(J, M, controllability_matrix, g, l, np):
+    # Reduced lateral state:
+    # z = [dx, dvx, dtheta, domega]
+    #
+    # Reduced input:
+    # u = dphi
+
+    A_lat = np.array([
+        [0, 1,  0, 0],
+        [0, 0, -g, 0],
+        [0, 0,  0, 1],
+        [0, 0,  0, 0],
+    ])
+
+    B_lat = np.array([
+        [0],
+        [-g],
+        [0],
+        [-(M * g * l) / (2 * J)],
+    ])
+
+    print("A_lat =")
+    print(A_lat)
+
+    print("B_lat =")
+    print(B_lat)
+
+    # Check controllability of the reduced system
+    C_lat = controllability_matrix(A_lat, B_lat)
+    rank_C_lat = np.linalg.matrix_rank(C_lat)
+
+    print("Controllability rank:", rank_C_lat)
+    print("State dimension:", A_lat.shape[0])
+
+    if rank_C_lat == A_lat.shape[0]:
+        print("The reduced lateral model is controllable.")
+    else:
+        print("The reduced lateral model is not controllable.")
     return
 
 
