@@ -1087,7 +1087,7 @@ def _(mo):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ### 🔓 Solution
+    ## 🔓 Solution
 
     At equilibrium, the booster does not move or rotate:
 
@@ -1177,6 +1177,113 @@ def _(mo):
 
     Introduce the error variables $\Delta x$, $\Delta y$, $\Delta \theta$, and $\Delta f$ and $\Delta \phi$ of the state and input values with respect to the generic equilibrium configuration.
     What are the linear ordinary differential equations that govern (approximately) these variables in a neighbourhood of the equilibrium?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## 🔓 Solution
+
+    We linearize the system around the equilibrium:
+
+    \[
+    \theta=0,
+    \quad
+    \phi=0,
+    \quad
+    f=Mg.
+    \]
+
+    We introduce small variations:
+
+    \[
+    \theta = 0 + \Delta\theta,
+    \quad
+    \phi = 0 + \Delta\phi,
+    \quad
+    f = Mg + \Delta f.
+    \]
+
+    The nonlinear equations are:
+
+    \[
+    \ddot{x}
+    =
+    -\frac{f}{M}\sin(\theta+\phi)
+    \]
+
+    \[
+    \ddot{y}
+    =
+    \frac{f}{M}\cos(\theta+\phi)-g
+    \]
+
+    \[
+    \ddot{\theta}
+    =
+    -\frac{f}{J}\frac{\ell}{2}\sin(\phi).
+    \]
+
+    For small angles:
+
+    \[
+    \sin(z)\approx z,
+    \quad
+    \cos(z)\approx 1.
+    \]
+
+    So:
+
+    \[
+    \Delta\ddot{x}
+    \approx
+    -\frac{Mg}{M}(\Delta\theta+\Delta\phi)
+    \]
+
+    \[
+    \Rightarrow
+    \Delta\ddot{x}
+    =
+    -g\Delta\theta-g\Delta\phi.
+    \]
+
+    For the vertical motion:
+
+    \[
+    \Delta\ddot{y}
+    =
+    \frac{1}{M}\Delta f.
+    \]
+
+    For the tilt:
+
+    \[
+    \Delta\ddot{\theta}
+    \approx
+    -\frac{Mg}{J}\frac{\ell}{2}\Delta\phi.
+    \]
+
+    So the linearized model is:
+
+    \[
+    \Delta\ddot{x}
+    =
+    -g\Delta\theta-g\Delta\phi
+    \]
+
+    \[
+    \Delta\ddot{y}
+    =
+    \frac{1}{M}\Delta f
+    \]
+
+    \[
+    \Delta\ddot{\theta}
+    =
+    -\frac{Mg\ell}{2J}\Delta\phi.
+    \]
     """)
     return
 
