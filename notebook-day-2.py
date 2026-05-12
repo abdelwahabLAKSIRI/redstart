@@ -1460,7 +1460,7 @@ def _(J, M, g, l, np):
 
     print("B =")
     print(B)
-    return
+    return (A,)
 
 
 @app.cell(hide_code=True)
@@ -1470,6 +1470,54 @@ def _(mo):
 
     Is the generic equilibrium asymptotically stable?
     """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### 🔓 Solution
+
+    To study the stability of the equilibrium, we compute the eigenvalues of the matrix \(A\).
+
+    If all eigenvalues have strictly negative real parts, the equilibrium is asymptotically stable.
+
+    Here:
+
+    \[
+    A=
+    \begin{bmatrix}
+    0 & 1 & 0 & 0 & 0 & 0 \\
+    0 & 0 & 0 & 0 & -g & 0 \\
+    0 & 0 & 0 & 1 & 0 & 0 \\
+    0 & 0 & 0 & 0 & 0 & 0 \\
+    0 & 0 & 0 & 0 & 0 & 1 \\
+    0 & 0 & 0 & 0 & 0 & 0
+    \end{bmatrix}
+    \]
+
+    All diagonal terms are zero, and the matrix only contains chains of integrators.
+
+    Therefore, all eigenvalues are:
+
+    \[
+    \lambda = 0.
+    \]
+
+    So the equilibrium is **not asymptotically stable**.
+
+    Physically, this means that without feedback control, the booster does not naturally return to equilibrium after a perturbation.
+    """)
+    return
+
+
+@app.cell
+def _(A, np):
+    # Compute eigenvalues of A
+    eigenvalues = np.linalg.eigvals(A)
+
+    print("Eigenvalues of A:")
+    print(eigenvalues)
     return
 
 
