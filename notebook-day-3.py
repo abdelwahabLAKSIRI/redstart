@@ -2659,12 +2659,107 @@ def _(mo):
     mo.md(r"""
     ## 🧩 Exact Linearization
 
-    Show that with yet another auxiliary system with input $u=(u_1, u_2)$ and output $v$ fed into the previous one, we can achieve the dynamics
+    Differentiating $h^{(3)}$ one more time yields the fourth derivative:
 
     $$
-    h^{(4)} = u
+    h^{(4)}
+    =
+    \frac{1}{M}
+    \begin{bmatrix}
+    (v_1-z\dot\theta^2)\sin\theta + (v_2+2\dot z\dot\theta)\cos\theta \\
+    -(v_1-z\dot\theta^2)\cos\theta + (v_2+2\dot z\dot\theta)\sin\theta
+    \end{bmatrix}
+    $$
+
+    To keep things readable, we introduce two shorthand quantities:
+
+    $$
+    a = v_1 - z\dot\theta^2, \qquad b = v_2 + 2\dot z\dot\theta
+    $$
+
+    and the expression collapses into a clean rotation-like product:
+
+    $$
+    h^{(4)}
+    =
+    \frac{1}{M}
+    \begin{bmatrix} \sin\theta & \cos\theta \\ -\cos\theta & \sin\theta \end{bmatrix}
+    \begin{bmatrix} a \\ b \end{bmatrix}
+    $$
+
+    The goal is to impose $h^{(4)} = u$, turning the system into a pure double integrator.
+    Inverting the rotation matrix (which is orthogonal, so its inverse is just its transpose) gives:
+
+    $$
+    \begin{bmatrix} a \\ b \end{bmatrix}
+    =
+    M
+    \begin{bmatrix} \sin\theta & -\cos\theta \\ \cos\theta & \sin\theta \end{bmatrix}
+    \begin{bmatrix} u_1 \\ u_2 \end{bmatrix}
+    $$
+
+    Reading off the two components explicitly:
+
+    $$
+    a = M(u_1\sin\theta - u_2\cos\theta), \qquad b = M(u_1\cos\theta + u_2\sin\theta)
+    $$
+
+    Substituting back the definitions of $a$ and $b$, we can solve directly for the actual inputs $v_1$ and $v_2$:
+
+    $$
+    \boxed{v_1 = z\dot\theta^2 + M(u_1\sin\theta - u_2\cos\theta)}
+    $$
+
+    $$
+    \boxed{v_2 = -2\dot z\dot\theta + M(u_1\cos\theta + u_2\sin\theta)}
+    $$
+
+    With this choice, all the nonlinear terms cancel exactly, and the closed-loop system satisfies simply:
+
+    $$
+    \boxed{h^{(4)} = u}
     $$
     """)
+    return
+
+
+@app.cell
+def _(M, np):
+    # Exact linearization
+    # Given the new input u = [u1, u2],
+    # compute v = [v1, v2] such that h^(4) = u.
+
+    def exlin_v(theta, dtheta, z, dz, u):
+        """
+        Compute the auxiliary input v = [v1, v2]
+        that gives h^(4) = u.
+
+        Inputs:
+            theta  : tilt angle
+            dtheta : angular velocity
+            z      : auxiliary state
+            dz     : derivative of z
+            u      : desired fourth derivative [u1, u2]
+
+        Returns:
+            v = [v1, v2]
+        """
+
+        u1 = u[0]
+        u2 = u[1]
+
+        v1 = (
+            z * dtheta**2
+            + M * (u1 * np.sin(theta) - u2 * np.cos(theta))
+        )
+
+        v2 = (
+            -2 * dz * dtheta
+            + M * (u1 * np.cos(theta) + u2 * np.sin(theta))
+        )
+
+        return np.array([v1, v2])
+
     return
 
 
@@ -2673,8 +2768,98 @@ def _(mo):
     mo.md(r"""
     ## 🧩 State to Derivatives of the Output
 
-    Implement a function `Tr` of `x, dx, y, dy, theta, dtheta, z, dz` that returns `h_x, h_y, dh_x, dh_y, d2h_x, d2h_y, d3h_x, d3h_y`.
+    We define the output $h$ directly from the position variables $(x,\, y,\, \theta)$:
+
+    $$
+    h = \begin{bmatrix} x - \frac{\ell}{6}\sin\theta \\ y + \frac{\ell}{6}\cos\theta \end{bmatrix}
+    $$
+
+    Differentiating once brings in the velocities $(\dot x,\, \dot y,\, \dot\theta)$:
+
+    $$
+    \dot h = \begin{bmatrix} \dot x - \frac{\ell}{6}\cos\theta\,\dot\theta \\ \dot y - \frac{\ell}{6}\sin\theta\,\dot\theta \end{bmatrix}
+    $$
+
+    Differentiating again, the thrust $z$ enters the picture alongside $\theta$:
+
+    $$
+    \ddot h = \begin{bmatrix} \frac{z}{M}\sin\theta \\ -\frac{z}{M}\cos\theta - g \end{bmatrix}
+    $$
+
+    One more derivative, and the full set $(z,\, \dot z,\, \theta,\, \dot\theta)$ is needed:
+
+    $$
+    h^{(3)} = \frac{1}{M}\begin{bmatrix} \dot z\sin\theta + z\dot\theta\cos\theta \\ -\dot z\cos\theta + z\dot\theta\sin\theta \end{bmatrix}
+    $$
+
+    Each differentiation step draws in a new layer of the state, until all eight variables have appeared. Altogether, the function `Tr` achieves the mapping
+
+    $$
+    (x,\,\dot x,\,y,\,\dot y,\,\theta,\,\dot\theta,\,z,\,\dot z)
+    \;\longmapsto\;
+    (h_x,\,h_y,\,\dot h_x,\,\dot h_y,\,\ddot h_x,\,\ddot h_y,\,h_x^{(3)},\,h_y^{(3)})
+    $$
     """)
+    return
+
+
+@app.cell
+def _(M, g, l, np):
+    # State to derivatives of the output
+
+    def Tr(x, dx, y, dy, theta, dtheta, z, dz):
+        """
+        Convert the state variables into the output h
+        and its first three derivatives.
+
+        Inputs:
+            x, dx       : horizontal position and velocity
+            y, dy       : vertical position and velocity
+            theta       : tilt angle
+            dtheta      : angular velocity
+            z, dz       : auxiliary state and its derivative
+
+        Returns:
+            h_x, h_y,
+            dh_x, dh_y,
+            d2h_x, d2h_y,
+            d3h_x, d3h_y
+        """
+
+        # h
+        h_x = x - (l / 6) * np.sin(theta)
+        h_y = y + (l / 6) * np.cos(theta)
+
+        # first derivative of h
+        dh_x = dx - (l / 6) * np.cos(theta) * dtheta
+        dh_y = dy - (l / 6) * np.sin(theta) * dtheta
+
+        # second derivative of h
+        d2h_x = (z / M) * np.sin(theta)
+        d2h_y = -(z / M) * np.cos(theta) - g
+
+        # third derivative of h
+        d3h_x = (1 / M) * (
+            dz * np.sin(theta)
+            + z * dtheta * np.cos(theta)
+        )
+
+        d3h_y = (1 / M) * (
+            -dz * np.cos(theta)
+            + z * dtheta * np.sin(theta)
+        )
+
+        return (
+            h_x,
+            h_y,
+            dh_x,
+            dh_y,
+            d2h_x,
+            d2h_y,
+            d3h_x,
+            d3h_y,
+        )
+
     return
 
 
