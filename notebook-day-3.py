@@ -3141,9 +3141,258 @@ def _(mo):
     mo.md(r"""
     ## 🧩 Admissible Path Computation
 
-    Implement a function
+    We want to construct a trajectory between an initial state and a final state.
 
-    ```python
+    The exact linearization gives
+
+    \[
+    h^{(4)}=u.
+    \]
+
+    So we can choose an admissible path for \(h(t)\), then recover the original variables using the inverse transformation.
+
+    The idea is:
+
+    1. Convert the initial state into
+
+    \[
+    h(0),\dot h(0),\ddot h(0),h^{(3)}(0).
+    \]
+
+    2. Convert the final state into
+
+    \[
+    h(t_f),\dot h(t_f),\ddot h(t_f),h^{(3)}(t_f).
+    \]
+
+    3. For each coordinate of \(h\), build a polynomial of degree \(7\).
+
+    A degree \(7\) polynomial has 8 coefficients, so it can match 8 boundary conditions:
+
+    \[
+    h(0),\dot h(0),\ddot h(0),h^{(3)}(0),
+    \]
+
+    and
+
+    \[
+    h(t_f),\dot h(t_f),\ddot h(t_f),h^{(3)}(t_f).
+    \]
+
+    Then, at each time \(t\), we compute
+
+    \[
+    h(t),\dot h(t),\ddot h(t),h^{(3)}(t),h^{(4)}(t).
+    \]
+
+    Using the inverse map, we recover
+
+    \[
+    x,\dot x,y,\dot y,\theta,\dot\theta,z,\dot z.
+    \]
+
+    Finally, since
+
+    \[
+    u=h^{(4)},
+    \]
+
+    we compute \(v\), then the force components, and finally recover \(f\) and \(\phi\).
+    """)
+    return
+
+
+@app.cell
+def _(M, g, l, np):
+    # Admissible Path Computation
+
+    def ac_Tr(x, dx, y, dy, theta, dtheta, z, dz):
+        """
+        Convert state variables into:
+        h, dh, d2h, d3h.
+        """
+
+        ac_h = np.array([
+            x - (l / 6) * np.sin(theta),
+            y + (l / 6) * np.cos(theta),
+        ])
+
+        ac_dh = np.array([
+            dx - (l / 6) * np.cos(theta) * dtheta,
+            dy - (l / 6) * np.sin(theta) * dtheta,
+        ])
+
+        ac_d2h = np.array([
+            (z / M) * np.sin(theta),
+            -(z / M) * np.cos(theta) - g,
+        ])
+
+        ac_d3h = (1 / M) * np.array([
+            dz * np.sin(theta) + z * dtheta * np.cos(theta),
+            -dz * np.cos(theta) + z * dtheta * np.sin(theta),
+        ])
+
+        return ac_h, ac_dh, ac_d2h, ac_d3h
+
+
+    def ac_T_inv(h, dh, d2h, d3h):
+        """
+        Recover:
+        x, dx, y, dy, theta, dtheta, z, dz
+        from h, dh, d2h, d3h.
+
+        We use the assumption z < 0.
+        """
+
+        ac_r = np.sqrt(
+            d2h[0]**2
+            + (d2h[1] + g)**2
+        )
+
+        if ac_r == 0:
+            raise ValueError("Inversion impossible because r = 0.")
+
+        ac_z = -M * ac_r
+
+        ac_sin_theta = -d2h[0] / ac_r
+        ac_cos_theta = (d2h[1] + g) / ac_r
+
+        ac_theta = np.arctan2(
+            ac_sin_theta,
+            ac_cos_theta,
+        )
+
+        ac_dz = M * (
+            d3h[0] * ac_sin_theta
+            - d3h[1] * ac_cos_theta
+        )
+
+        ac_dtheta = (
+            M
+            * (
+                d3h[0] * ac_cos_theta
+                + d3h[1] * ac_sin_theta
+            )
+            / ac_z
+        )
+
+        ac_x = h[0] + (l / 6) * ac_sin_theta
+        ac_y = h[1] - (l / 6) * ac_cos_theta
+
+        ac_dx = dh[0] + (l / 6) * ac_cos_theta * ac_dtheta
+        ac_dy = dh[1] + (l / 6) * ac_sin_theta * ac_dtheta
+
+        return np.array([
+            ac_x,
+            ac_dx,
+            ac_y,
+            ac_dy,
+            ac_theta,
+            ac_dtheta,
+            ac_z,
+            ac_dz,
+        ])
+
+
+    def ac_v_from_u(theta, dtheta, z, dz, u):
+        """
+        Compute v = [v1, v2] such that h^(4) = u.
+        """
+
+        u1 = u[0]
+        u2 = u[1]
+
+        ac_v1 = (
+            z * dtheta**2
+            + M * (u1 * np.sin(theta) - u2 * np.cos(theta))
+        )
+
+        ac_v2 = (
+            -2 * dz * dtheta
+            + M * (u1 * np.cos(theta) + u2 * np.sin(theta))
+        )
+
+        return np.array([
+            ac_v1,
+            ac_v2,
+        ])
+
+    return ac_T_inv, ac_Tr, ac_v_from_u
+
+
+@app.cell
+def _(np):
+    def ac_poly_row(t, derivative_order):
+        """
+        Row used to impose a derivative constraint on a degree 7 polynomial.
+        """
+
+        ac_row = np.zeros(8)
+
+        for k in range(derivative_order, 8):
+            ac_coeff = 1.0
+
+            for j in range(derivative_order):
+                ac_coeff *= k - j
+
+            ac_row[k] = ac_coeff * t**(k - derivative_order)
+
+        return ac_row
+
+
+    def ac_poly_coeffs(p0, dp0, d2p0, d3p0, pf, dpf, d2pf, d3pf, tf):
+        """
+        Compute degree 7 polynomial coefficients satisfying:
+        p, p', p'', p''' at t=0 and t=tf.
+        """
+
+        ac_A = np.vstack([
+            ac_poly_row(0.0, 0),
+            ac_poly_row(0.0, 1),
+            ac_poly_row(0.0, 2),
+            ac_poly_row(0.0, 3),
+            ac_poly_row(tf, 0),
+            ac_poly_row(tf, 1),
+            ac_poly_row(tf, 2),
+            ac_poly_row(tf, 3),
+        ])
+
+        ac_b = np.array([
+            p0,
+            dp0,
+            d2p0,
+            d3p0,
+            pf,
+            dpf,
+            d2pf,
+            d3pf,
+        ])
+
+        return np.linalg.solve(ac_A, ac_b)
+
+
+    def ac_eval_poly(coeffs, t, derivative_order):
+        """
+        Evaluate a polynomial derivative at time t.
+        """
+
+        ac_value = 0.0
+
+        for k in range(derivative_order, len(coeffs)):
+            ac_coeff = 1.0
+
+            for j in range(derivative_order):
+                ac_coeff *= k - j
+
+            ac_value += ac_coeff * coeffs[k] * t**(k - derivative_order)
+
+        return ac_value
+
+    return ac_eval_poly, ac_poly_coeffs
+
+
+@app.cell
+def _(M, ac_T_inv, ac_Tr, ac_eval_poly, ac_poly_coeffs, ac_v_from_u, l, np):
     def compute(
         x_0,
         dx_0,
@@ -3163,11 +3412,195 @@ def _(mo):
         dz_tf,
         tf,
     ):
-        ...
+        """
+        Return a function fun(t) giving:
 
-    ```
+        x, dx, y, dy, theta, dtheta, z, dz, f, phi
 
-    that returns a function `fun` such that `fun(t)` is a value of `x, dx, y, dy, theta, dtheta, z, dz, f, phi` at time `t` that match the initial and final values provided as arguments to `compute`.
+        along an admissible trajectory matching the initial and final states.
+        """
+
+        # Convert initial state to h derivatives
+        ac_h0, ac_dh0, ac_d2h0, ac_d3h0 = ac_Tr(
+            x_0,
+            dx_0,
+            y_0,
+            dy_0,
+            theta_0,
+            dtheta_0,
+            z_0,
+            dz_0,
+        )
+
+        # Convert final state to h derivatives
+        ac_hf, ac_dhf, ac_d2hf, ac_d3hf = ac_Tr(
+            x_tf,
+            dx_tf,
+            y_tf,
+            dy_tf,
+            theta_tf,
+            dtheta_tf,
+            z_tf,
+            dz_tf,
+        )
+
+        # Polynomial coefficients for h_x(t)
+        ac_coeffs_x = ac_poly_coeffs(
+            ac_h0[0],
+            ac_dh0[0],
+            ac_d2h0[0],
+            ac_d3h0[0],
+            ac_hf[0],
+            ac_dhf[0],
+            ac_d2hf[0],
+            ac_d3hf[0],
+            tf,
+        )
+
+        # Polynomial coefficients for h_y(t)
+        ac_coeffs_y = ac_poly_coeffs(
+            ac_h0[1],
+            ac_dh0[1],
+            ac_d2h0[1],
+            ac_d3h0[1],
+            ac_hf[1],
+            ac_dhf[1],
+            ac_d2hf[1],
+            ac_d3hf[1],
+            tf,
+        )
+
+        def fun(t):
+            # h and its derivatives
+            ac_h = np.array([
+                ac_eval_poly(ac_coeffs_x, t, 0),
+                ac_eval_poly(ac_coeffs_y, t, 0),
+            ])
+
+            ac_dh = np.array([
+                ac_eval_poly(ac_coeffs_x, t, 1),
+                ac_eval_poly(ac_coeffs_y, t, 1),
+            ])
+
+            ac_d2h = np.array([
+                ac_eval_poly(ac_coeffs_x, t, 2),
+                ac_eval_poly(ac_coeffs_y, t, 2),
+            ])
+
+            ac_d3h = np.array([
+                ac_eval_poly(ac_coeffs_x, t, 3),
+                ac_eval_poly(ac_coeffs_y, t, 3),
+            ])
+
+            ac_d4h = np.array([
+                ac_eval_poly(ac_coeffs_x, t, 4),
+                ac_eval_poly(ac_coeffs_y, t, 4),
+            ])
+
+            # Recover state variables
+            ac_state = ac_T_inv(
+                ac_h,
+                ac_dh,
+                ac_d2h,
+                ac_d3h,
+            )
+
+            ac_x = ac_state[0]
+            ac_dx = ac_state[1]
+            ac_y = ac_state[2]
+            ac_dy = ac_state[3]
+            ac_theta = ac_state[4]
+            ac_dtheta = ac_state[5]
+            ac_z = ac_state[6]
+            ac_dz = ac_state[7]
+
+            # Since h^(4) = u
+            ac_u = ac_d4h
+
+            # Compute v from u
+            ac_v = ac_v_from_u(
+                ac_theta,
+                ac_dtheta,
+                ac_z,
+                ac_dz,
+                ac_u,
+            )
+
+            ac_v2 = ac_v[1]
+
+            if ac_z == 0:
+                raise ValueError("The auxiliary force is undefined because z = 0.")
+
+            # Auxiliary force components
+            ac_A = ac_z - (M * l * ac_dtheta**2) / 6
+            ac_B = (M * l * ac_v2) / (6 * ac_z)
+
+            ac_alpha = ac_theta - np.pi / 2
+
+            ac_fx = (
+                np.cos(ac_alpha) * ac_A
+                - np.sin(ac_alpha) * ac_B
+            )
+
+            ac_fy = (
+                np.sin(ac_alpha) * ac_A
+                - np.cos(ac_alpha) * ac_B
+            )
+
+            # Recover f and phi from:
+            # fx = -f sin(theta + phi)
+            # fy =  f cos(theta + phi)
+
+            ac_f = np.sqrt(ac_fx**2 + ac_fy**2)
+
+            ac_phi = np.arctan2(
+                -ac_fx,
+                ac_fy,
+            ) - ac_theta
+
+            # Normalize phi to [-pi, pi]
+            ac_phi = (ac_phi + np.pi) % (2 * np.pi) - np.pi
+
+            return np.array([
+                ac_x,
+                ac_dx,
+                ac_y,
+                ac_dy,
+                ac_theta,
+                ac_dtheta,
+                ac_z,
+                ac_dz,
+                ac_f,
+                ac_phi,
+            ])
+
+        return fun
+
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Result
+
+    The function `compute(...)` returns a function `fun(t)`.
+
+    For each time \(t\), `fun(t)` returns
+
+    \[
+    x,\dot x,y,\dot y,\theta,\dot\theta,z,\dot z,f,\phi.
+    \]
+
+    The construction works because the output \(h(t)\) is chosen as a degree 7 polynomial matching
+
+    \[
+    h,\dot h,\ddot h,h^{(3)}
+    \]
+
+    at both the initial and final times.
+
+    Then the inverse transformation recovers the physical state, and exact linearization gives the force and reactor angle needed to follow the path.
     """)
     return
 
