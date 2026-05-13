@@ -3576,7 +3576,7 @@ def _(M, ac_T_inv, ac_Tr, ac_eval_poly, ac_poly_coeffs, ac_v_from_u, l, np):
 
         return fun
 
-    return
+    return (compute,)
 
 
 @app.cell(hide_code=True)
@@ -3610,13 +3610,226 @@ def _(mo):
     mo.md(r"""
     ## 🧩 Graphical Validation
 
-    Test your `compute` function with
+    We now test the function `compute(...)` with the prescribed boundary conditions.
 
-    - `(x_0, dx_0, y_0, dy_0, theta_0, dtheta_0, z_0, dz_0) = (5.0, 0.0, 20.0, -1.0, -np.pi/8, 0.0, -M*g, 0.0`),
-    - `(x_tf, dx_tf, y_tf, dy_tf, theta_tf, dtheta_tf, z_tf, dz_tf) = (0.0, 0.0, 2/3*l, 0.0,     0.0, 0.0, -M*g, 0.0`),
-    - `tf = 10.0`.
+    Initial state:
 
-    Make the graph of the relevant variables as a function of time, then make an animation out of the same result. Comment and iterate if necessary!
+    \[
+    (x_0,\dot x_0,y_0,\dot y_0,\theta_0,\dot\theta_0,z_0,\dot z_0)
+    =
+    (5,0,20,-1,-\pi/8,0,-Mg,0).
+    \]
+
+    Final state:
+
+    \[
+    (x_f,\dot x_f,y_f,\dot y_f,\theta_f,\dot\theta_f,z_f,\dot z_f)
+    =
+    (0,0,2\ell/3,0,0,0,-Mg,0).
+    \]
+
+    Final time:
+
+    \[
+    t_f=10.
+    \]
+
+    We plot the relevant variables and then animate the resulting trajectory.
+    """)
+    return
+
+
+@app.cell
+def _(M, compute, g, l, np):
+    # Graphical Validation
+
+    gv_tf = 10.0
+
+    gv_fun = compute(
+        5.0,          # x_0
+        0.0,          # dx_0
+        20.0,         # y_0
+        -1.0,         # dy_0
+        -np.pi / 8,   # theta_0
+        0.0,          # dtheta_0
+        -M * g,       # z_0
+        0.0,          # dz_0
+
+        0.0,          # x_tf
+        0.0,          # dx_tf
+        2 * l / 3,    # y_tf
+        0.0,          # dy_tf
+        0.0,          # theta_tf
+        0.0,          # dtheta_tf
+        -M * g,       # z_tf
+        0.0,          # dz_tf
+
+        gv_tf,
+    )
+
+    gv_t_grid = np.linspace(0.0, gv_tf, 1000)
+
+    # Evaluate the path
+    gv_values = np.array([
+        gv_fun(gv_t)
+        for gv_t in gv_t_grid
+    ]).T
+
+    gv_x = gv_values[0]
+    gv_dx = gv_values[1]
+    gv_y = gv_values[2]
+    gv_dy = gv_values[3]
+    gv_theta = gv_values[4]
+    gv_dtheta = gv_values[5]
+    gv_z = gv_values[6]
+    gv_dz = gv_values[7]
+    gv_f = gv_values[8]
+    gv_phi = gv_values[9]
+
+    print("Initial value from computed path:")
+    print(gv_fun(0.0))
+
+    print("\nFinal value from computed path:")
+    print(gv_fun(gv_tf))
+
+    print("\nMaximum |theta|:", np.max(np.abs(gv_theta)))
+    print("Maximum |phi|:", np.max(np.abs(gv_phi)))
+    print("Minimum z:", np.min(gv_z))
+    print("Minimum f:", np.min(gv_f))
+    return (
+        gv_dx,
+        gv_dy,
+        gv_f,
+        gv_fun,
+        gv_phi,
+        gv_t_grid,
+        gv_tf,
+        gv_theta,
+        gv_x,
+        gv_y,
+    )
+
+
+@app.cell
+def _(gv_dx, gv_dy, gv_f, gv_phi, gv_t_grid, gv_theta, gv_x, gv_y, np, plt):
+    def gv_plot_path():
+        gv_fig, gv_axes = plt.subplots(5, 1, figsize=(8, 12), sharex=True)
+
+        gv_axes[0].plot(gv_t_grid, gv_x, label=r"$x(t)$")
+        gv_axes[0].plot(gv_t_grid, gv_y, label=r"$y(t)$")
+        gv_axes[0].set_ylabel("position")
+        gv_axes[0].grid(True)
+        gv_axes[0].legend()
+
+        gv_axes[1].plot(gv_t_grid, gv_dx, label=r"$\dot{x}(t)$")
+        gv_axes[1].plot(gv_t_grid, gv_dy, label=r"$\dot{y}(t)$")
+        gv_axes[1].set_ylabel("velocity")
+        gv_axes[1].grid(True)
+        gv_axes[1].legend()
+
+        gv_axes[2].plot(gv_t_grid, gv_theta, label=r"$\theta(t)$")
+        gv_axes[2].axhline(np.pi / 2, color="grey", linestyle="--")
+        gv_axes[2].axhline(-np.pi / 2, color="grey", linestyle="--")
+        gv_axes[2].set_ylabel(r"$\theta$")
+        gv_axes[2].grid(True)
+        gv_axes[2].legend()
+
+        gv_axes[3].plot(gv_t_grid, gv_f, label=r"$f(t)$")
+        gv_axes[3].set_ylabel("force")
+        gv_axes[3].grid(True)
+        gv_axes[3].legend()
+
+        gv_axes[4].plot(gv_t_grid, gv_phi, label=r"$\phi(t)$")
+        gv_axes[4].axhline(np.pi / 2, color="grey", linestyle="--")
+        gv_axes[4].axhline(-np.pi / 2, color="grey", linestyle="--")
+        gv_axes[4].set_xlabel("time")
+        gv_axes[4].set_ylabel(r"$\phi$")
+        gv_axes[4].grid(True)
+        gv_axes[4].legend()
+
+        gv_fig.tight_layout()
+
+        return gv_fig
+
+
+    gv_path_plot = gv_plot_path()
+    gv_path_plot
+    return
+
+
+@app.cell
+def _(booster_anim, gv_fun, gv_tf, mo, world):
+    def gv_animation():
+        def gv_anim_x(t):
+            return gv_fun(t)[0]
+
+        def gv_anim_y(t):
+            return gv_fun(t)[2]
+
+        def gv_anim_theta(t):
+            return gv_fun(t)[4]
+
+        def gv_anim_f(t):
+            return gv_fun(t)[8]
+
+        def gv_anim_phi(t):
+            return gv_fun(t)[9]
+
+        return mo.Html(
+            world(
+                [-2, 7, -1, 22],
+                booster_anim(
+                    gv_anim_x,
+                    gv_anim_y,
+                    gv_anim_theta,
+                    gv_anim_f,
+                    gv_anim_phi,
+                    T=gv_tf,
+                ),
+            )
+        ).center()
+
+
+    gv_animation()
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Interpretation
+
+    The graphs show whether the path satisfies the prescribed initial and final conditions.
+
+    We check that:
+
+    \[
+    x(0)=5,
+    \quad
+    y(0)=20,
+    \quad
+    \theta(0)=-\pi/8,
+    \]
+
+    and
+
+    \[
+    x(t_f)=0,
+    \quad
+    y(t_f)=2\ell/3,
+    \quad
+    \theta(t_f)=0.
+    \]
+
+    The variable \(z(t)\) should remain negative because the inversion was derived under the assumption
+
+    \[
+    z<0.
+    \]
+
+    The plots of \(f(t)\) and \(\phi(t)\) show whether the required force and reactor angle remain reasonable.
+
+    If the trajectory looks too aggressive, or if \(\phi(t)\) becomes too large, the natural fix is to increase \(t_f\). A larger final time gives the booster more time to reach the final state and usually reduces the required control effort.
     """)
     return
 
