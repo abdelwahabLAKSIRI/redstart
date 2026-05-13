@@ -2235,18 +2235,167 @@ def _(mo):
     mo.md(r"""
     ## 🧩 Geometrical Interpretation
 
+    The output is defined as
 
-    Consider the output $h$ of the original system
-
-    $$
-    h :=
+    \[
+    h =
     \begin{bmatrix}
-    x - (\ell/6) \sin \theta \\
-    y + (\ell/6) \cos \theta
-    \end{bmatrix} \in \mathbb{R}^2
-    $$
+    x - (\ell/6)\sin\theta \\
+    y + (\ell/6)\cos\theta
+    \end{bmatrix}.
+    \]
 
-    Provide a geometrical interpretation of $h$ (for example, make a drawing).
+    The point \((x,y)\) is the center of mass of the booster.
+
+    The vector
+
+    \[
+    \begin{bmatrix}
+    -\sin\theta \\
+    \cos\theta
+    \end{bmatrix}
+    \]
+
+    points along the booster axis from the center of mass toward the top of the booster.
+
+    Therefore,
+
+    \[
+    h =
+    \begin{bmatrix}
+    x\\
+    y
+    \end{bmatrix}
+    +
+    \frac{\ell}{6}
+    \begin{bmatrix}
+    -\sin\theta\\
+    \cos\theta
+    \end{bmatrix}.
+    \]
+
+    So \(h\) is a point located on the booster axis, at a distance \(\ell/6\) from the center of mass, in the direction of the top of the booster.
+
+    Since the distance from the center of mass to the top of the booster is \(\ell/2\), the point \(h\) is one third of the way from the center of mass to the top:
+
+    \[
+    \frac{\ell/6}{\ell/2}
+    =
+    \frac{1}{3}.
+    \]
+
+    Geometrically, \(h\) is not the center of mass. It is a point fixed on the booster body, located above the center of mass along the booster axis.
+    """)
+    return
+
+
+@app.cell
+def _(l, mo, np, svg, world):
+    # Geometrical interpretation of h
+    # We draw:
+    # - the booster body,
+    # - the center of mass (x, y),
+    # - the point h,
+    # - the segment from the center of mass to h.
+
+    geom_x = 0.0
+    geom_y = 2.0
+    geom_theta = np.pi / 6
+
+    # Coordinates of h
+    geom_h_x = geom_x - (l / 6) * np.sin(geom_theta)
+    geom_h_y = geom_y + (l / 6) * np.cos(geom_theta)
+
+    # Coordinates of the top and bottom of the booster
+    geom_top_x = geom_x - (l / 2) * np.sin(geom_theta)
+    geom_top_y = geom_y + (l / 2) * np.cos(geom_theta)
+
+    geom_bottom_x = geom_x + (l / 2) * np.sin(geom_theta)
+    geom_bottom_y = geom_y - (l / 2) * np.cos(geom_theta)
+
+    mo.Html(
+        world(
+            [-2, 2, -1, 4],
+        
+            # Booster axis
+            svg.line(
+                x1=geom_bottom_x,
+                y1=geom_bottom_y,
+                x2=geom_top_x,
+                y2=geom_top_y,
+                stroke="black",
+                stroke_width="0.05",
+            ),
+
+            # Center of mass
+            svg.circle(
+                cx=geom_x,
+                cy=geom_y,
+                r=0.07,
+                fill="blue",
+            ),
+
+            # Point h
+            svg.circle(
+                cx=geom_h_x,
+                cy=geom_h_y,
+                r=0.07,
+                fill="red",
+            ),
+
+            # Segment from center of mass to h
+            svg.line(
+                x1=geom_x,
+                y1=geom_y,
+                x2=geom_h_x,
+                y2=geom_h_y,
+                stroke="red",
+                stroke_width="0.03",
+                stroke_dasharray="0.08 0.05",
+            ),
+
+            # Labels
+            svg.text(
+                x=geom_x + 0.1,
+                y=geom_y,
+                fill="blue",
+            )("center $(x,y)$"),
+
+            svg.text(
+                x=geom_h_x + 0.1,
+                y=geom_h_y,
+                fill="red",
+            )("$h$"),
+        )
+    ).center()
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Interpretation of the drawing
+
+    In the drawing:
+
+    - the black line represents the booster axis;
+    - the blue point is the center of mass \((x,y)\);
+    - the red point is \(h\);
+    - the dashed red segment shows the displacement from \((x,y)\) to \(h\).
+
+    The vector from the center of mass to \(h\) is
+
+    \[
+    \frac{\ell}{6}
+    \begin{bmatrix}
+    -\sin\theta\\
+    \cos\theta
+    \end{bmatrix}.
+    \]
+
+    So \(h\) is attached to the booster body. When the booster rotates, the point \(h\) rotates with it.
+
+    Thus, \(h\) can be interpreted as a controlled output point located on the booster axis, above the center of mass.
     """)
     return
 
@@ -2256,8 +2405,118 @@ def _(mo):
     mo.md(r"""
     ## 🧩 First and Second-Order Derivatives
 
-    Compute $\dot{h}$ as a function of $\dot{x}$, $\dot{y}$, $\theta$ and $\dot{\theta}$ (and constants) and then $\ddot{h}$ as a function of $\theta$ and $z$ (and constants) when the auxiliary system is plugged in the booster.
+    We have
+
+    \[
+    h =
+    \begin{bmatrix}
+    x - \frac{\ell}{6}\sin\theta \\
+    y + \frac{\ell}{6}\cos\theta
+    \end{bmatrix}.
+    \]
+
+    Differentiate once:
+
+    \[
+    \dot h =
+    \begin{bmatrix}
+    \dot{x} - \frac{\ell}{6}\cos\theta \dot{\theta} \\
+    \dot{y} - \frac{\ell}{6}\sin\theta \dot{\theta}
+    \end{bmatrix}.
+    \]
+
+    Differentiate again:
+
+    \[
+    \ddot h =
+    \begin{bmatrix}
+    \ddot{x}
+    +
+    \frac{\ell}{6}\sin\theta \dot{\theta}^2
+    -
+    \frac{\ell}{6}\cos\theta \ddot{\theta}
+    \\
+    \ddot{y}
+    -
+    \frac{\ell}{6}\cos\theta \dot{\theta}^2
+    -
+    \frac{\ell}{6}\sin\theta \ddot{\theta}
+    \end{bmatrix}.
+    \]
+
+    When the auxiliary system is plugged in, the force is chosen so that the \(\dot{\theta}^2\) terms cancel. We obtain
+
+    \[
+    \ddot h =
+    \begin{bmatrix}
+    \frac{z}{M}\sin\theta \\
+    -\frac{z}{M}\cos\theta - g
+    \end{bmatrix}.
+    \]
+
+    So the final result is
+
+    \[
+    \boxed{
+    \dot h =
+    \begin{bmatrix}
+    \dot{x} - \frac{\ell}{6}\cos\theta \dot{\theta} \\
+    \dot{y} - \frac{\ell}{6}\sin\theta \dot{\theta}
+    \end{bmatrix}
+    }
+    \]
+
+    and
+
+    \[
+    \boxed{
+    \ddot h =
+    \begin{bmatrix}
+    \frac{z}{M}\sin\theta \\
+    -\frac{z}{M}\cos\theta - g
+    \end{bmatrix}
+    }.
+    \]
     """)
+    return
+
+
+@app.cell
+def _(M, g, l, np):
+    # First and second-order derivatives of h
+
+    def fsod_h_and_derivatives(x, dx, y, dy, theta, dtheta, z):
+        """
+        Compute h, dh, and d2h.
+
+        Inputs:
+            x, dx       : horizontal position and velocity
+            y, dy       : vertical position and velocity
+            theta       : tilt angle
+            dtheta      : angular velocity
+            z           : auxiliary variable
+
+        Returns:
+            h, dh, d2h
+        """
+
+        fsod_h = np.array([
+            x - (l / 6) * np.sin(theta),
+            y + (l / 6) * np.cos(theta),
+        ])
+
+        fsod_dh = np.array([
+            dx - (l / 6) * np.cos(theta) * dtheta,
+            dy - (l / 6) * np.sin(theta) * dtheta,
+        ])
+
+        fsod_d2h = np.array([
+            (z / M) * np.sin(theta),
+            -(z / M) * np.cos(theta) - g,
+        ])
+
+        return fsod_h, fsod_dh, fsod_d2h
+
     return
 
 
