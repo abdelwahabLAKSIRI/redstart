@@ -2194,7 +2194,7 @@ def _(mo):
     Let
     $$
     R(\alpha) =
-    \begin{bmatrix} +\cos \alpha & -\sin \alpha \\ +\sin \alpha & -\cos \alpha
+    \begin{bmatrix} +\cos \alpha & -\sin \alpha \\ +\sin \alpha & +\cos \alpha
     \end{bmatrix}
     $$
 
@@ -2868,11 +2868,271 @@ def _(mo):
     mo.md(r"""
     ## 🧩 Inversion
 
+    We assume\[z<0.\]
 
-    Assume for the sake of simplicity that $z<0$ at all times. Show that given the values of $h$, $\dot{h}$, $\ddot{h}$ and $h^{(3)}$, one can uniquely compute the booster state (the values of $x$, $\dot{x}$, $y$, $\dot{y}$, $\theta$, $\dot{\theta}$) and auxiliary system state (the values of $z$ and $\dot{z}$).
+    We are given
 
-    Implement the corresponding function `T_inv`.
+    \[
+    h,\quad \dot h,\quad \ddot h,\quad h^{(3)}.
+    \]
+
+    From the previous formulas,
+
+    \[
+    \ddot h =
+    \begin{bmatrix}
+    \frac{z}{M}\sin\theta \\
+    -\frac{z}{M}\cos\theta-g
+    \end{bmatrix}.
+    \]
+
+    So
+
+    \[
+    \ddot h+
+    \begin{bmatrix}
+    0\\
+    g
+    \end{bmatrix}
+    =
+    \frac{z}{M}
+    \begin{bmatrix}
+    \sin\theta\\
+    -\cos\theta
+    \end{bmatrix}.
+    \]
+
+    Let
+
+    \[
+    r=
+    \sqrt{
+    \ddot h_x^2+
+    (\ddot h_y+g)^2
+    }.
+    \]
+
+    Since \(z<0\),
+
+    \[
+    z=-Mr.
+    \]
+
+    Also,
+
+    \[
+    \sin\theta=-\frac{\ddot h_x}{r},
+    \quad
+    \cos\theta=\frac{\ddot h_y+g}{r}.
+    \]
+
+    Therefore,
+
+    \[
+    \theta=
+    \operatorname{atan2}
+    \left(
+    -\ddot h_x,
+    \ddot h_y+g
+    \right).
+    \]
+
+    Now, using
+
+    \[
+    h=
+    \begin{bmatrix}
+    x-\frac{\ell}{6}\sin\theta\\
+    y+\frac{\ell}{6}\cos\theta
+    \end{bmatrix},
+    \]
+
+    we recover
+
+    \[
+    x=h_x+\frac{\ell}{6}\sin\theta,
+    \]
+
+    \[
+    y=h_y-\frac{\ell}{6}\cos\theta.
+    \]
+
+    Using
+
+    \[
+    \dot h=
+    \begin{bmatrix}
+    \dot x-\frac{\ell}{6}\cos\theta\dot\theta\\
+    \dot y-\frac{\ell}{6}\sin\theta\dot\theta
+    \end{bmatrix},
+    \]
+
+    we recover
+
+    \[
+    \dot x=\dot h_x+\frac{\ell}{6}\cos\theta\dot\theta,
+    \]
+
+    \[
+    \dot y=\dot h_y+\frac{\ell}{6}\sin\theta\dot\theta.
+    \]
+
+    It remains to recover \(\dot\theta\) and \(\dot z\).
+
+    From
+
+    \[
+    h^{(3)}
+    =
+    \frac{1}{M}
+    \begin{bmatrix}
+    \dot z\sin\theta+z\dot\theta\cos\theta\\
+    -\dot z\cos\theta+z\dot\theta\sin\theta
+    \end{bmatrix},
+    \]
+
+    we get
+
+    \[
+    \dot z
+    =
+    M
+    \left(
+    h^{(3)}_x\sin\theta
+    -
+    h^{(3)}_y\cos\theta
+    \right),
+    \]
+
+    and
+
+    \[
+    z\dot\theta
+    =
+    M
+    \left(
+    h^{(3)}_x\cos\theta
+    +
+    h^{(3)}_y\sin\theta
+    \right).
+    \]
+
+    Since \(z\neq0\),
+
+    \[
+    \dot\theta
+    =
+    \frac{
+    M
+    \left(
+    h^{(3)}_x\cos\theta
+    +
+    h^{(3)}_y\sin\theta
+    \right)
+    }{z}.
+    \]
+
+    Thus, from \(h,\dot h,\ddot h,h^{(3)}\), we recover uniquely
+
+    \[
+    x,\dot x,y,\dot y,\theta,\dot\theta,z,\dot z.
+    \]
     """)
+    return
+
+
+@app.cell
+def _(M, g, l, np):
+    # Inversion
+    # Given: h, dh, d2h, d3h
+
+    # Recover: x, dx, y, dy, theta, dtheta, z, dz
+
+    # Assumption: z < 0
+
+    def T_inv(h, dh, d2h, d3h):
+        """
+        Invert the transformation from output derivatives to state variables.
+
+        Inputs:
+            h    = [h_x, h_y]
+            dh   = [dh_x, dh_y]
+            d2h  = [d2h_x, d2h_y]
+            d3h  = [d3h_x, d3h_y]
+
+        Returns:
+            [x, dx, y, dy, theta, dtheta, z, dz]
+        """
+
+        inv_hx = h[0]
+        inv_hy = h[1]
+
+        inv_dhx = dh[0]
+        inv_dhy = dh[1]
+
+        inv_d2hx = d2h[0]
+        inv_d2hy = d2h[1]
+
+        inv_d3hx = d3h[0]
+        inv_d3hy = d3h[1]
+
+        # Compute r = sqrt(d2h_x^2 + (d2h_y + g)^2)
+        inv_r = np.sqrt(
+            inv_d2hx**2
+            + (inv_d2hy + g)**2
+        )
+
+        if inv_r == 0:
+            raise ValueError("Inversion is not possible because r = 0.")
+
+        # Since z < 0:
+        inv_z = -M * inv_r
+
+        # Recover sin(theta) and cos(theta)
+        inv_sin_theta = -inv_d2hx / inv_r
+        inv_cos_theta = (inv_d2hy + g) / inv_r
+
+        # Recover theta
+        inv_theta = np.arctan2(
+            inv_sin_theta,
+            inv_cos_theta,
+        )
+
+        # Recover dz
+        inv_dz = M * (
+            inv_d3hx * inv_sin_theta
+            - inv_d3hy * inv_cos_theta
+        )
+
+        # Recover dtheta
+        inv_dtheta = (
+            M
+            * (
+                inv_d3hx * inv_cos_theta
+                + inv_d3hy * inv_sin_theta
+            )
+            / inv_z
+        )
+
+        # Recover x and y from h
+        inv_x = inv_hx + (l / 6) * inv_sin_theta
+        inv_y = inv_hy - (l / 6) * inv_cos_theta
+
+        # Recover dx and dy from dh
+        inv_dx = inv_dhx + (l / 6) * inv_cos_theta * inv_dtheta
+        inv_dy = inv_dhy + (l / 6) * inv_sin_theta * inv_dtheta
+
+        return np.array([
+            inv_x,
+            inv_dx,
+            inv_y,
+            inv_dy,
+            inv_theta,
+            inv_dtheta,
+            inv_z,
+            inv_dz,
+        ])
+
     return
 
 
