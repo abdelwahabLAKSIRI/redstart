@@ -2525,8 +2525,132 @@ def _(mo):
     mo.md(r"""
     ## 🧩 Third and Fourth-Order Derivatives
 
-    Compute the third derivative $h^{(3)}$ of $h$ as a function of $\theta$ and $z$ (and constants) and then the fourth derivative $h^{(4)}$ of $h$ with respect to time as a function of $\theta$, $\dot{\theta}$, $z$, $\dot{z}$, $v$ (and constants) when the auxiliary system is on.
+    From the previous result,
+
+    \[
+    \ddot h =
+    \begin{bmatrix}
+    \frac{z}{M}\sin\theta \\
+    -\frac{z}{M}\cos\theta-g
+    \end{bmatrix}.
+    \]
+
+    Differentiate once:
+
+    \[
+    h^{(3)}
+    =
+    \frac{1}{M}
+    \begin{bmatrix}
+    \dot z \sin\theta + z\dot\theta\cos\theta \\
+    -\dot z \cos\theta + z\dot\theta\sin\theta
+    \end{bmatrix}.
+    \]
+
+    Now differentiate again.
+
+    Since the auxiliary system gives
+
+    \[
+    \ddot z = v_1,
+    \]
+
+    and
+
+    \[
+    \ddot\theta = \frac{v_2}{z},
+    \]
+
+    we obtain
+
+    \[
+    h^{(4)}
+    =
+    \frac{1}{M}
+    \begin{bmatrix}
+    (v_1-z\dot\theta^2)\sin\theta
+    +
+    (v_2+2\dot z\dot\theta)\cos\theta
+    \\
+    -(v_1-z\dot\theta^2)\cos\theta
+    +
+    (v_2+2\dot z\dot\theta)\sin\theta
+    \end{bmatrix}.
+    \]
+
+    So the final results are
+
+    \[
+    \boxed{
+    h^{(3)}
+    =
+    \frac{1}{M}
+    \begin{bmatrix}
+    \dot z \sin\theta + z\dot\theta\cos\theta \\
+    -\dot z \cos\theta + z\dot\theta\sin\theta
+    \end{bmatrix}
+    }
+    \]
+
+    and
+
+    \[
+    \boxed{
+    h^{(4)}
+    =
+    \frac{1}{M}
+    \begin{bmatrix}
+    (v_1-z\dot\theta^2)\sin\theta
+    +
+    (v_2+2\dot z\dot\theta)\cos\theta
+    \\
+    -(v_1-z\dot\theta^2)\cos\theta
+    +
+    (v_2+2\dot z\dot\theta)\sin\theta
+    \end{bmatrix}
+    }.
+    \]
     """)
+    return
+
+
+@app.cell
+def _(M, np):
+    # Third and fourth-order derivatives of h
+
+    def tfod_h3_h4(theta, dtheta, z, dz, v):
+        """
+        Compute h^(3) and h^(4).
+
+        Inputs:
+            theta  : tilt angle
+            dtheta : angular velocity
+            z      : auxiliary state
+            dz     : derivative of z
+            v      : auxiliary input [v1, v2]
+
+        Returns:
+            h3, h4
+        """
+
+        v1 = v[0]
+        v2 = v[1]
+
+        tfod_h3 = (1 / M) * np.array([
+            dz * np.sin(theta) + z * dtheta * np.cos(theta),
+            -dz * np.cos(theta) + z * dtheta * np.sin(theta),
+        ])
+
+        tfod_a = v1 - z * dtheta**2
+        tfod_b = v2 + 2 * dz * dtheta
+
+        tfod_h4 = (1 / M) * np.array([
+            tfod_a * np.sin(theta) + tfod_b * np.cos(theta),
+            -tfod_a * np.cos(theta) + tfod_b * np.sin(theta),
+        ])
+
+        return tfod_h3, tfod_h4
+
     return
 
 
